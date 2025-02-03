@@ -1,10 +1,8 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Primitives where
 
 import WidgetRattus
-import WidgetRattus.Time
 
 data Fun t a = K !a | Fun !(Box (t -> a))
 
