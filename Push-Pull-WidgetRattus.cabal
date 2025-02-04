@@ -50,6 +50,7 @@ executable Push-Pull-WidgetRattus
   other-modules:
     Behaviour
     Event
+    Examples.Test
     Primitives
 
   -- Modules included in this executable, other than Main.

@@ -1,8 +1,8 @@
-{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
 {-# HLINT ignore "Avoid lambda" #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Behaviour where
 
@@ -28,4 +28,27 @@ discretize (Beh (x ::: xs)) = do
 timer :: C (Beh NominalDiffTime)
 timer = do
   startTime <- time
-  return $ Beh (Fun (box (\currentTime -> diffTime startTime currentTime)) ::: never)
+  return $ Beh (Fun (box (\currentTime -> diffTime currentTime startTime)) ::: never)
+
+withTime :: O (Box (Time -> a)) -> O a
+withTime delayed =
+  delayC $ delay (let f = adv delayed in do unbox f <$> time)
+
+triggerAwait :: (Stable b) => Box (a -> b -> c) -> O (Sig a) -> Beh b -> O (Sig (Maybe' c))
+triggerAwait = trig
+  where
+    trig :: (Stable b) => Box (a -> b -> c) -> O (Sig a) -> Beh b -> O (Sig (Maybe' c))
+    trig f' as (Beh (b ::: bs)) =
+      delayC $
+        delay
+          ( let d = select as bs
+             in ( do
+                    t <- time
+                    return
+                      ( case d of
+                          Fst (a' ::: as') bs' -> Just' (unbox f' a' (apply b t)) ::: trig f' as' (Beh (b ::: bs'))
+                          Snd as' bs' -> Nothing' ::: trig f' as' (Beh bs')
+                          Both (a' ::: as') (b' ::: bs') -> Just' (unbox f' a' (apply b' t)) ::: trig f' as' (Beh (b' ::: bs'))
+                      )
+                )
+          )
