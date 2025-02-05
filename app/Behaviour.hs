@@ -30,9 +30,9 @@ timer = do
   startTime <- time
   return $ Beh (Fun (box (\currentTime -> diffTime currentTime startTime)) ::: never)
 
-withTime :: O (Box (Time -> a)) -> O a
+withTime :: O (Time -> a) -> O a
 withTime delayed =
-  delayC $ delay (let f = adv delayed in do unbox f <$> time)
+  delayC $ delay (let f = adv delayed in do f <$> time)
 
 triggerAwait :: (Stable b) => Box (a -> b -> c) -> O (Sig a) -> Beh b -> O (Sig (Maybe' c))
 triggerAwait = trig

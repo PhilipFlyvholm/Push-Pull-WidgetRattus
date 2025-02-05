@@ -4,4 +4,4 @@ import Examples.Test (window, window2)
 import WidgetRattus.Widgets
 
 main :: IO ()
-main = runApplication window2
+main = runApplication window
