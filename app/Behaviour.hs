@@ -27,19 +27,16 @@ discretize (Beh (K x ::: xs)) = do
   let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
   return $ x ::: rest
 discretize (Beh (Fun f ::: xs)) = do
-  let dt = sampleInterval
   t <- time
   let cur = unbox f t
   let rest =
-        delayC
-          ( delay
-              ( let d = select xs dt
-                 in case d of
-                      Fst x _ -> discretize (Beh x)
-                      Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
-                      Both x _ -> discretize (Beh x)
-              )
-          )
+        delayC $
+          delay
+            ( case select xs sampleInterval of
+                Fst x _ -> discretize (Beh x)
+                Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
+                Both x _ -> discretize (Beh x)
+            )
   return (cur ::: rest)
 
 elapsedTime :: C (Beh NominalDiffTime)
