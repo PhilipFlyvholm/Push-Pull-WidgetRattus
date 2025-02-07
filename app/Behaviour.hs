@@ -19,14 +19,31 @@ timeBehaviour = Beh (Fun (box id) ::: never)
 map :: Box (a -> b) -> Beh a -> Beh b
 map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
 
-discretize :: Beh a -> C (Sig a)
-discretize (Beh (x ::: xs)) = do
-  t <- time
-  let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
-  return $ apply x t ::: rest
+sampleInterval :: O ()
+sampleInterval = timer 200000 -- For some reason is this a second
 
-timer :: C (Beh NominalDiffTime)
-timer = do
+discretize :: Beh a -> C (Sig a)
+discretize (Beh (K x ::: xs)) = do
+  let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
+  return $ x ::: rest
+discretize (Beh (Fun f ::: xs)) = do
+  let dt = sampleInterval
+  t <- time
+  let cur = unbox f t
+  let rest =
+        delayC
+          ( delay
+              ( let d = select xs dt
+                 in case d of
+                      Fst x _ -> discretize (Beh x)
+                      Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
+                      Both x _ -> discretize (Beh x)
+              )
+          )
+  return (cur ::: rest)
+
+elapsedTime :: C (Beh NominalDiffTime)
+elapsedTime = do
   startTime <- time
   return $ Beh (Fun (box (\currentTime -> diffTime currentTime startTime)) ::: never)
 
