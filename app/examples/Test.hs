@@ -13,12 +13,18 @@ import Data.Text hiding (all, filter, map)
 import WidgetRattus
 import WidgetRattus.Signal
 import WidgetRattus.Widgets
+  ( VStack,
+    btnOnClickSig,
+    mkButton,
+    mkConstVStack,
+    mkLabel,
+  )
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
 window :: C VStack
 window = do
-  t <- Behaviour.elapsedTime
-  tSig <- discretize t
+  elapsedTime' <- Behaviour.elapsedTime
+  tSig <- discretize elapsedTime'
 
   text <- mkLabel tSig
   btn <- mkButton (const ("Increment" :: Text))
