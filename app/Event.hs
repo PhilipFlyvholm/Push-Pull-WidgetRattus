@@ -2,7 +2,7 @@
 module Event where
 
 import Behaviour
-import Primitives (Fun (K))
+import Primitives (Fun (K), apply)
 import WidgetRattus
 import WidgetRattus.Signal
 
@@ -27,7 +27,6 @@ stepperAwait :: Ev a -> O (Beh a)
 stepperAwait (Ev sig) =
   delay (let (x ::: xs) = adv sig in Beh (K x ::: delay (let (Beh sig') = adv (stepperAwait (Ev xs)) in sig')))
 
-{-
 triggerAwait :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev (Maybe' c)
 triggerAwait f event behaviour = Ev (trig f event behaviour)
   where
@@ -46,4 +45,3 @@ triggerAwait f event behaviour = Ev (trig f event behaviour)
                       )
                 )
           )
--}
