@@ -27,7 +27,7 @@ window = do
   tSig <- discretize elapsedTime'
 
   text <- mkLabel tSig
-  btn <- mkButton (const ("Increment" :: Text))
+  btn <- mkButton (WidgetRattus.Signal.const ("Increment" :: Text))
   let sig = btnOnClickSig btn
   let sig' = scanAwait (box (\n _ -> n + 1 :: Int)) 0 sig
   lbl <- mkLabel sig'

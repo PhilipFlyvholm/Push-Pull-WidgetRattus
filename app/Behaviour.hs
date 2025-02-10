@@ -8,13 +8,16 @@ module Behaviour where
 
 import Primitives
 import WidgetRattus
-import WidgetRattus.Signal hiding (switch, zipWith)
-import Prelude hiding (map, zipWith)
+import WidgetRattus.Signal hiding (const, switch, zipWith)
+import Prelude hiding (const, map, zipWith)
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
+const :: Fun Time a -> Beh a
+const x = Beh (x ::: never)
+
 timeBehaviour :: Beh Time
-timeBehaviour = Beh (Fun (box id) ::: never)
+timeBehaviour = const (Fun (box id))
 
 map :: Box (a -> b) -> Beh a -> Beh b
 map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
