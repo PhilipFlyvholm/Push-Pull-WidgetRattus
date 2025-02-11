@@ -4,9 +4,19 @@ module Event where
 import Behaviour
 import Primitives (Fun (K), apply)
 import WidgetRattus
-import WidgetRattus.Signal
+import WidgetRattus.Signal hiding (interleave)
 
 newtype Ev a = Ev (O (Sig a))
+
+mkEv :: Box (O a) -> Ev a
+mkEv a =
+  Ev
+    ( delay
+        ( adv (unbox a)
+            ::: let Ev s = mkEv a
+                 in s
+        )
+    )
 
 map :: Box (a -> b) -> Ev a -> Ev b
 map f (Ev sig) =
@@ -45,3 +55,22 @@ triggerAwait f event behaviour = Ev (trig f event behaviour)
                       )
                 )
           )
+
+interleave :: Box (a -> a -> a) -> Ev a -> Ev a -> Ev a
+interleave f (Ev xs) (Ev ys) =
+  Ev $
+    delay
+      ( case select xs ys of
+          Fst (x ::: xs') ys' ->
+            let Ev rest = interleave f (Ev xs') (Ev ys')
+             in (x ::: rest)
+          Snd xs' (y ::: ys') ->
+            let Ev rest = interleave f (Ev xs') (Ev ys')
+             in (y ::: rest)
+          Both (x ::: xs') (y ::: ys') ->
+            let Ev rest = interleave f (Ev xs') (Ev ys')
+             in unbox f x y ::: rest
+      )
+
+scan :: (Stable b) => Box (b -> a -> b) -> b -> Ev a -> Ev b
+scan f acc (Ev as) = Ev $ delay (WidgetRattus.Signal.scan f acc (adv as))

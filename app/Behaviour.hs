@@ -81,3 +81,4 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     app (Fun x') (Fun y') = Fun (box (\t -> unbox f (unbox x' t) (unbox y' t)))
     app (Fun x') (K y') = Fun (box (\t -> unbox f (unbox x' t) y'))
     app (K x') (Fun y') = Fun (box (unbox f x' . unbox y'))
+
