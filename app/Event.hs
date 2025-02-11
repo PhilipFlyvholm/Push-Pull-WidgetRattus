@@ -1,8 +1,10 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Event where
 
 import Behaviour
-import Primitives (Fun (K), apply)
+import Primitives (Fun (..), apply, mapF)
 import WidgetRattus
 import WidgetRattus.Signal hiding (interleave)
 
@@ -74,3 +76,12 @@ interleave f (Ev xs) (Ev ys) =
 
 scan :: (Stable b) => Box (b -> a -> b) -> b -> Ev a -> Ev b
 scan f acc (Ev as) = Ev $ delay (WidgetRattus.Signal.scan f acc (adv as))
+
+app :: (Stable b, Stable a) => Box (b -> a -> b) -> Box (Fun Time b -> a -> Fun Time b)
+app f =
+  box
+    (\b a -> mapF (box (\b' -> unbox f b' a)) b)
+
+scanB :: (Stable b, Stable a) => Box (b -> a -> b) -> b -> Ev a -> Beh b
+scanB f acc (Ev as) =
+  Beh (K acc ::: delay (WidgetRattus.Signal.scan (app f) (K acc) (adv as)))

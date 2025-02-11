@@ -8,30 +8,27 @@ module Widgets where
 
 import Behaviour
 import Event
-import qualified Monomer as M
 import WidgetRattus
-import WidgetRattus.Signal
-import WidgetRattus.Widgets.InternalTypes
-import qualified Monomer as WidgetRattus
+import WidgetRattus.Widgets
+import qualified WidgetRattus.Widgets.InternalTypes as WR
 
-mkButton :: (Displayable a) => Beh a -> C Button
+mkButton :: (Displayable a) => Beh a -> C WR.Button
 mkButton t = do
-    c <- chan
-    return Button{btnLabel = t, onClickChan = c}
+  c <- chan
+  sig <- discretize t
+  return WR.Button {btnContent = sig, btnClick = c}
 
-data AppEvent where
-  AppEvent :: !(Chan a) -> !a -> AppEvent
-
+{-
 data Button where
-  Button :: (Displayable a) => {onClickChan :: !(Chan ()), btnLabel :: !(Beh a)} -> Button
-
-instance IsWidget Button where
-  mkWidgetNode Button {onClickChan = click, btnLabel = b} = 
-    mkWidgetNode WidgetRattus.Widgets.Button {btnContent = discretize b, btnClick = click}
-
-btnOnClick :: Button -> Ev ()
+  Button :: (Displayable a) => {onClickChan :: !(Chan ()), btnLabel :: !(Beh a)} -> Widgets.Button
+-}
+{--
+instance IsWidget Widgets.Button where
+  mkWidgetNode Button {onClickChan = click, btnLabel = b} = ?
+-}
+btnOnClick :: WR.Button -> Ev ()
 btnOnClick b =
-  let ch = onClickChan b
+  let ch = btnClick b
    in mkEv (box (wait ch))
 
 -- continuous ''Button

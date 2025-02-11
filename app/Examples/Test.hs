@@ -9,16 +9,14 @@
 module Examples.Test (window) where
 
 import Behaviour
-import Data.Text hiding (all, filter, map)
+import Event
 import WidgetRattus
-import WidgetRattus.Signal
 import WidgetRattus.Widgets
   ( VStack,
-    btnOnClickSig,
-    mkButton,
     mkConstVStack,
     mkLabel,
   )
+import Widgets (btnOnClick, mkButton)
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
 window :: C VStack
@@ -27,8 +25,10 @@ window = do
   tSig <- discretize elapsedTime'
 
   text <- mkLabel tSig
-  btn <- mkButton (WidgetRattus.Signal.const ("Increment" :: Text))
-  let sig = btnOnClickSig btn
-  let sig' = scanAwait (box (\n _ -> n + 1 :: Int)) 0 sig
-  lbl <- mkLabel sig'
+  btn <- mkButton timeBehaviour
+  let ev = btnOnClick btn
+  -- let ev' = Event.scan (box (\n _ -> n + 1 :: Int)) 0 ev
+  -- sig <- discretize (Event.stepper ev' 0)
+  beh <- discretize $ Event.scanB (box (\n _ -> n + 1 :: Int)) 0 ev
+  lbl <- mkLabel beh
   mkConstVStack (text :* lbl :* btn)
