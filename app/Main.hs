@@ -1,7 +1,7 @@
 module Main where
 
 import Examples.Test (window)
-import WidgetRattus.Widgets
+import Widgets (runApplication')
 
 main :: IO ()
-main = runApplication window
+main = runApplication' window
