@@ -3,12 +3,18 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE RankNTypes #-}
+{-# HLINT ignore "Eta reduce" #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Behaviour where
 
 import Primitives
 import WidgetRattus
-import WidgetRattus.Signal hiding (const, switch, zipWith)
+import WidgetRattus.Signal hiding (const, switch)
 import Prelude hiding (const, map, zipWith)
 
 newtype Beh a = Beh (Sig (Fun Time a))
@@ -62,6 +68,18 @@ switch (Beh (x ::: xs)) d =
             Both _ (Beh d') -> d'
         )
 
+
+-- | This function is a variant of combines the values of two signals
+-- using the function argument. @zipWith f xs ys@ produces a new value
+-- @unbox f x y@ whenever @xs@ or @ys@ produce a new value, where @x@
+-- and @y@ are the current values of @xs@ and @ys@, respectively.
+--
+-- Example:
+--
+-- >                      xs:  1 2 3     2
+-- >                      ys:  1     0 5 2
+-- >
+-- > zipWith (box (+)) xs ys:  2 3 4 3 8 4
 zipWith :: (Stable a, Stable b) => Box (a -> b -> c) -> Beh a -> Beh b -> Beh c
 zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
   Beh
@@ -69,9 +87,9 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
         ::: delay
           ( let (Beh rest) =
                   ( case select xs ys of
-                      Fst xs' lys -> zipWith f (Beh xs') (Beh (y ::: lys))
-                      Snd lxs ys' -> zipWith f (Beh (x ::: lxs)) (Beh ys')
-                      Both xs' ys' -> zipWith f (Beh xs') (Beh ys')
+                      Fst xs' lys -> Behaviour.zipWith f (Beh xs') (Beh (y ::: lys))
+                      Snd lxs ys' -> Behaviour.zipWith f (Beh (x ::: lxs)) (Beh ys')
+                      Both xs' ys' -> Behaviour.zipWith f (Beh xs') (Beh ys')
                   )
              in rest
           )
@@ -82,3 +100,8 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     app (Fun x') (K y') = Fun (box (\t -> unbox f (unbox x' t) y'))
     app (K x') (Fun y') = Fun (box (unbox f x' . unbox y'))
 
+-- | Variant of 'zipWith' with three behaviours.
+zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box(a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
+zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
+  where cds :: Beh (Box (c -> d))
+        cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs

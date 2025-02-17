@@ -1,10 +1,13 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Primitives where
 
 import WidgetRattus
 
 data Fun t a = K !a | Fun !(Box (t -> a))
+
+continuous ''Fun
 
 apply :: Fun t a -> (t -> a)
 apply (K a) = Prelude.const a

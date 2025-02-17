@@ -196,3 +196,13 @@ runApplication' w =
         w' <- w
         mkOldWidget w'
     )
+
+data Widget' where
+  Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
+ 
+
+instance IsWidget' Widget' where
+  mkOldWidget (Widget' w beh) = do
+    beh' <- discretize beh 
+    w' <- mkOldWidget w
+    return (WR.Widget w' beh')
