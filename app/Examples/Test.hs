@@ -10,23 +10,15 @@ module Examples.Test (window) where
 import Behaviour
 import Event
 import WidgetRattus
-import WidgetRattus.Widgets
-  ( 
-    mkLabel,
-  )
-import Widgets (btnOnClick, mkButton', mkConstVStack', VStack')
+
+import Widgets 
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
 window :: C VStack'
 window = do
   elapsedTime' <- Behaviour.elapsedTime
-  tSig <- discretize elapsedTime'
-
-  text <- mkLabel tSig
+  text <- mkLabel' elapsedTime'
   btn <- mkButton' timeBehaviour
   let ev = btnOnClick btn
-  -- let ev' = Event.scan (box (\n _ -> n + 1 :: Int)) 0 ev
-  -- sig <- discretize (Event.stepper ev' 0)
-  beh <- discretize $ Event.scanB (box (\n _ -> n + 1 :: Int)) 0 ev
-  lbl <- mkLabel beh
+  lbl <- mkLabel' $ Event.scanB (box (\n _ -> n + 1 :: Int)) 0 ev
   mkConstVStack' (text :* lbl :* btn)
