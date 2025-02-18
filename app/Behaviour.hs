@@ -1,53 +1,65 @@
+{-# HLINT ignore "Eta reduce" #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
+{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE RankNTypes #-}
-{-# HLINT ignore "Eta reduce" #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Behaviour where
 
 import Primitives
 import WidgetRattus
-import WidgetRattus.Signal hiding (const, switch)
+import WidgetRattus.Signal hiding (future, current, const, switch)
 import Prelude hiding (const, map, zipWith)
+import qualified Prelude
 
-newtype Beh a = Beh (Sig (Fun Time a))
+type SBeh a = Sig (Fun Time a)
+
+newtype Beh a = Beh (Time -> SBeh a)
 
 const :: Fun Time a -> Beh a
-const x = Beh (x ::: never)
+const x = Beh (\_ -> x ::: never) -- Not sure this is correct
 
 timeBehaviour :: Beh Time
 timeBehaviour = const (Fun (box id))
 
-map :: Box (a -> b) -> Beh a -> Beh b
-map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
+map :: forall a b. Box (a -> b) -> Beh a -> Beh b
+map f (Beh as) =
+  Beh (\t -> run (as t))
+  where
+    run :: SBeh a -> SBeh b
+    run (x ::: xs) =
+      mapF f x ::: delay (run (adv xs))
 
 sampleInterval :: O ()
 sampleInterval = timer 200000 -- For some reason is this a second
 
-discretize :: Beh a -> C (Sig a)
-discretize (Beh (K x ::: xs)) = do
-  let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
-  return $ x ::: rest
-discretize (Beh (Fun f ::: xs)) = do
-  t <- time
-  let cur = unbox f t
-  let rest =
-        delayC $
-          delay
-            ( case select xs sampleInterval of
-                Fst x _ -> discretize (Beh x)
-                Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
-                Both x _ -> discretize (Beh x)
-            )
-  return (cur ::: rest)
+current :: Beh a -> Time -> Fun Time a
+current (Beh f) t = 
+  let (x ::: _) = f t in x
 
+future :: Beh a -> Time -> O (SBeh a)
+future (Beh f) t =
+  let (_ ::: xs) = f t in xs
+
+discretize :: Beh a -> C (Sig a)
+discretize b = do
+  t <- time
+  let cur = current b t
+  let fut = future b t
+  let rest = delayC $ delay
+            ( case select fut sampleInterval of
+                Fst x _ -> discretize (Beh (Prelude.const x))
+                Snd beh' _ -> discretize (Beh (\t -> (current b t) ::: beh'))
+                Both x _ -> discretize (Beh (Prelude.const x))
+            )
+  return $ (apply cur t) ::: rest
+{-
 elapsedTime :: C (Beh NominalDiffTime)
 elapsedTime = do
   startTime <- time
@@ -67,7 +79,6 @@ switch (Beh (x ::: xs)) d =
             Snd _ (Beh d') -> d'
             Both _ (Beh d') -> d'
         )
-
 
 -- | This function is a variant of combines the values of two signals
 -- using the function argument. @zipWith f xs ys@ produces a new value
@@ -101,7 +112,9 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     app (K x') (Fun y') = Fun (box (unbox f x' . unbox y'))
 
 -- | Variant of 'zipWith' with three behaviours.
-zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box(a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
+zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box (a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
 zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
-  where cds :: Beh (Box (c -> d))
-        cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
+  where
+    cds :: Beh (Box (c -> d))
+    cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
+    -}
