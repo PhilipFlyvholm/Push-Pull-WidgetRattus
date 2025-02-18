@@ -31,8 +31,8 @@ map f (Ev sig) =
         )
     )
 
-stepper :: Ev a -> a -> Beh a
-stepper event initial =
+stepper :: a -> Ev a -> Beh a
+stepper initial event =
   Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait event) in sig))
 
 stepperAwait :: Ev a -> O (Beh a)

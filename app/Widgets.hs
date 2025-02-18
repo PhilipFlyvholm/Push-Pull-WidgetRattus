@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Widgets where
 
 import Behaviour
@@ -21,7 +22,7 @@ import WidgetRattus.Widgets.InternalTypes (HStack(HStack))
 import WidgetRattus.Signal (Sig ((:::)), map)
 import Prelude hiding (max, min)
 
-class IsWidget' a where
+class (Continuous a) => IsWidget' a where
   mkOldWidget :: a -> C Widget
 
 class Widgets' ws where
@@ -43,7 +44,7 @@ instance {-# OVERLAPPING #-} (Widgets' w) => Widgets' (List w) where
       toWidgetList' w = do
         toWidgetList' w
 
-instance {-# OVERLAPPABLE #-} (IsWidget a) => IsWidget' a where
+instance {-# OVERLAPPABLE #-} (IsWidget a, Continuous a) => IsWidget' a where
   mkOldWidget a = do
     let w = mkWidget a
     return w
@@ -51,6 +52,9 @@ instance {-# OVERLAPPABLE #-} (IsWidget a) => IsWidget' a where
 -- HStack 
 data HStack' where
       HStack' :: IsWidget a => !(Beh (List a)) -> HStack'
+
+
+continuous ''HStack'
 
 instance IsWidget' HStack' where
       mkOldWidget (HStack' ws) = do
@@ -70,6 +74,7 @@ mkConstHStack' w = do
 data VStack' where
   VStack' :: (IsWidget a) => !(Beh (List a)) -> VStack'
 
+continuous ''VStack'
 instance IsWidget' VStack' where
   mkOldWidget (VStack' ws) = do
     ws' <- discretize ws
@@ -89,6 +94,7 @@ mkConstVStack' w = do
 data TextDropdown' =
   TextDropdown' {tddCurr :: !(Beh Text), tddEvent :: !(Chan Text), tddList :: !(Beh (List Text))}
 
+continuous ''TextDropdown'
 instance IsWidget' TextDropdown' where
   mkOldWidget (TextDropdown' cur ev list) = do
     cur' <- discretize cur
@@ -98,8 +104,7 @@ instance IsWidget' TextDropdown' where
 mkTextDropdown' :: Beh (List Text) -> Text -> C TextDropdown'
 mkTextDropdown' opts initial = do
   c <- chan
-  let (Ev d) = mkEv (box (wait c))
-  let beh = Beh $ WidgetRattus.Signal.map (box K) (initial ::: d)
+  let beh = Event.stepper initial $ mkEv (box (wait c))
   return $ TextDropdown' beh c opts
 
 
@@ -107,25 +112,26 @@ mkTextDropdown' opts initial = do
 data Popup' =
   Popup' {popCurr :: !(Beh Bool), popEvent :: !(Chan Bool), popChild :: !(Beh Widget)}
 
+continuous ''Popup'
 instance IsWidget' Popup' where
       mkOldWidget (Popup' curr ch child) = do
         curr' <- discretize curr
         child' <- discretize child
         return $ WR.mkWidget (WR.Popup curr' ch child')
 
-mkPopup' :: Beh Bool -> Beh Widget -> C Popup'
-mkPopup' (Beh(b ::: bs)) w = do
+mkPopup' :: Ev Bool -> Beh Widget -> C Popup'
+mkPopup' initialVisibility w = do
       c <- chan
-      t <- time
-      let d = mkEv (box (wait c))
-      let beh = Behaviour.zipWith (box Prelude.const) (Beh (b ::: bs)) (Event.stepper d (apply b t))
-      return Popup'{popCurr = beh, popEvent = c, popChild = w}
+      let changeEvent = mkEv (box (wait c))
+      let visibility = Event.stepper False $ Event.interleave (box Prelude.const) initialVisibility changeEvent
+      return Popup'{popCurr = visibility, popEvent = c, popChild = w}
 
 
 -- Slider
 data Slider' =
   Slider' {sldCurr :: !(Beh Int), sldEvent :: !(Chan Int), sldMin :: !(Beh Int), sldMax :: !(Beh Int)}
 
+continuous ''Slider'
 instance IsWidget' Slider' where
   mkOldWidget (Slider' curr ev min max) = do
     curr' <- discretize curr
@@ -136,8 +142,7 @@ instance IsWidget' Slider' where
 mkSlider :: Int -> Beh Int -> Beh Int -> C Slider'
 mkSlider start min max = do
   c <- chan
-  let (Ev rest) = mkEv (box (wait c))
-  let curr = Beh $ WidgetRattus.Signal.map (box K) (start ::: rest)
+  let curr = Event.stepper start $ mkEv (box (wait c))
   return $ Slider' curr c min max
 
 
@@ -145,6 +150,7 @@ mkSlider start min max = do
 data Button' where
   Button' :: (Displayable a) => {btnClick :: !(Chan ()), btnContent :: !(Beh a)} -> Button'
 
+continuous ''Button'
 instance IsWidget' Button' where
   mkOldWidget (Button' click b) = do
     w <- discretize b
@@ -160,6 +166,7 @@ mkButton' t = do
 data Label' where
       Label' :: (Displayable a) => {labText :: !(Beh a)} -> Label'
 
+continuous ''Label'
 instance IsWidget' Label' where
   mkOldWidget (Label' t) = do
     t' <- discretize t
@@ -173,6 +180,7 @@ mkLabel' t = do
 -- TextField
 data TextField' = TextField' {tfContent :: !(Beh Text), tfInput :: !(Chan Text)}
 
+continuous ''TextField'
 instance IsWidget' TextField' where
   mkOldWidget (TextField' b inp) = do
     txt <- discretize b
@@ -201,6 +209,7 @@ data Widget' where
   Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
  
 
+continuous ''Widget'
 instance IsWidget' Widget' where
   mkOldWidget (Widget' w beh) = do
     beh' <- discretize beh 

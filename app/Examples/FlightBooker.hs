@@ -61,34 +61,35 @@ bookingToText oneWay dep ret =
 
 flightBooker :: C VStack'
 flightBooker = do
-      dropDown <- mkTextDropdown' (const (K ["One-Way", "Return-Flight"])) "One-Way"
-      tf1 <- mkTextField' "01-01-2021"
-      tf2 <- mkTextField' "01-02-2021"
-      button <- mkButton' (Behaviour.const (K ("Book" :: Text)))
+      flightTypeDropdown <- mkTextDropdown' (const (K ["One-Way", "Return-Flight"])) "One-Way"
+      departureDateField <- mkTextField' "01-01-2021"
+      returnDateField <- mkTextField' "01-02-2021"
+      bookButton <- mkButton' (Behaviour.const (K ("Book" :: Text)))
       
-      let isRF = Behaviour.map (box (== "Return-Flight")) (tddCurr dropDown)
-      let isOW = Behaviour.map (box (== "One-Way")) (tddCurr dropDown)
+      let isReturnFlight = Behaviour.map (box (== "Return-Flight")) (tddCurr flightTypeDropdown)
+      let isOneWayFlight = Behaviour.map (box (== "One-Way")) (tddCurr flightTypeDropdown)
       
-      let labelBeh = zipWith3 (box bookingToText) isOW (tfContent tf1) (tfContent tf2)
+      let bookingSummary = zipWith3 (box bookingToText) isOneWayFlight (tfContent departureDateField) (tfContent returnDateField)
 
-      let beh = scan (box (\_ _ -> True)) False (btnOnClick button)
+      let triggerPopup = scan (box (\_ _ -> True)) False (btnOnClick bookButton)
       
-      label <- mkLabel' labelBeh
-      label' <- mkOldWidget label
-      popup <- mkPopup' (Event.stepper beh False) (const (K label'))
+      summaryLabel <- mkLabel' bookingSummary
+      summaryLabel' <- mkOldWidget summaryLabel
+      summaryPopup <- mkPopup' triggerPopup (const (K summaryLabel'))
 
-      let tf1IsDate = Behaviour.map (box isDate) (tfContent tf1)
-      let tf1IsLater = Behaviour.zipWith (box isLater) (tfContent tf1) (tfContent tf2)
+      let departureDateFieldIsDate = Behaviour.map (box isDate) (tfContent departureDateField)
+      let departureDateFieldIsLater = Behaviour.zipWith (box isLater) (tfContent departureDateField) (tfContent returnDateField)
 
-      let oneWayAndDate = Behaviour.zipWith (box (&&)) isOW tf1IsDate
-      let returnFlightAndIsLater = Behaviour.zipWith (box (&&)) isRF tf1IsLater
+      let oneWayAndDate = Behaviour.zipWith (box (&&)) isOneWayFlight departureDateFieldIsDate
+      let returnFlightAndIsLater = Behaviour.zipWith (box (&&)) isReturnFlight departureDateFieldIsLater
       let validBooking = Behaviour.zipWith (box (||)) oneWayAndDate returnFlightAndIsLater
 
-      isRF' <- discretize isRF
-      tf2' <- mkOldWidget tf2
+      isReturnFlight' <- discretize isReturnFlight
+      returnDateField' <- mkOldWidget returnDateField
       validBooking' <- discretize validBooking
-      button' <- mkOldWidget button
-      mkConstVStack' (popup :* dropDown :* tf1 :* setEnabled tf2' isRF' :* setEnabled button' validBooking')
+      bookButton' <- mkOldWidget bookButton
+      
+      mkConstVStack' (summaryPopup :* flightTypeDropdown :* departureDateField :* setEnabled returnDateField' isReturnFlight' :* setEnabled bookButton' validBooking')
 
 main :: IO ()
 main = runApplication' flightBooker

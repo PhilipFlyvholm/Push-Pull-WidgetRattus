@@ -16,6 +16,7 @@ import Primitives
 import WidgetRattus
 import WidgetRattus.Signal hiding (const, switch)
 import Prelude hiding (const, map, zipWith)
+import WidgetRattus.InternalPrimitives (Continuous(..), O (Delay), inputInClock, adv', clockUnion)
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
@@ -105,3 +106,12 @@ zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box(a -> b -> c ->
 zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
   where cds :: Beh (Box (c -> d))
         cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
+
+instance Continuous a => Continuous (Beh a) where
+    progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
+        if inputInClock inp cl then Beh(adv' xs inp)
+        else progressInternal inp (Beh (x ::: xs))
+    progressAndNext inp (Beh (x ::: xs@(Delay cl _))) =
+        if inputInClock inp cl then let n = adv' xs inp in (Beh n, nextProgress n)
+        else let (n , cl') = progressAndNext inp x in (Beh(n ::: xs) , cl `clockUnion` cl')
+    nextProgress (Beh (x ::: (Delay cl _))) = nextProgress x `clockUnion` cl
