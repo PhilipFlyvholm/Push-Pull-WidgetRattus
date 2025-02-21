@@ -9,8 +9,6 @@ import Primitives (Fun (..), apply, mapF)
 import WidgetRattus
 import WidgetRattus.Signal hiding (interleave, scan)
 
--- newtype Ev a = Ev (O (Sig a))
-
 data Ev a
   = EvDense !(O (Sig a))
   | EvSparse !(O (Sig (Maybe' a)))
@@ -58,12 +56,6 @@ stepperAwait :: Ev a -> O (Beh a)
 stepperAwait (EvDense sig) =
   delay (let (x ::: xs) = adv sig in Beh (K x ::: delay (let (Beh sig') = adv (stepperAwait (EvDense xs)) in sig')))
 
--- bind :: Ev a -> O (Maybe' a)
--- bind (EvSparse e) =
---   delay (
---     let x = adv e in
-
---   )
 
 triggerAwait :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev c
 triggerAwait f event behaviour = EvSparse (trig f event behaviour)
