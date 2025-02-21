@@ -5,7 +5,7 @@ module Event where
 
 import Behaviour
 import Data.IntMap ()
-import Primitives (Fun (..), apply, mapF)
+import Primitives (Fun (..), apply)
 import WidgetRattus
 import WidgetRattus.Signal hiding (interleave, scan)
 
@@ -48,14 +48,21 @@ map f (EvSparse sig) =
         )
     )
 
-stepper :: a -> Ev a -> Beh a
+stepper :: Stable a => a -> Ev a -> Beh a
 stepper initial event =
-  Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait event) in sig))
+  Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait initial event) in sig))
 
-stepperAwait :: Ev a -> O (Beh a)
-stepperAwait (EvDense sig) =
-  delay (let (x ::: xs) = adv sig in Beh (K x ::: delay (let (Beh sig') = adv (stepperAwait (EvDense xs)) in sig')))
-
+stepperAwait :: Stable a => a -> Ev a -> O (Beh a)
+stepperAwait _ (EvDense ev) =
+  delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (let (Beh ev') = adv (stepperAwait x (EvDense xs)) in ev')))
+stepperAwait initial (EvSparse ev) =
+  delay
+    ( let (x ::: xs) = adv ev
+       in case x of
+            Just' x' ->
+              Beh (K x' ::: delay (let (Beh ev') = adv (stepperAwait x' (EvSparse xs)) in ev'))
+            Nothing' -> Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait initial (EvSparse xs)) in sig))
+    )
 
 triggerAwait :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev c
 triggerAwait f event behaviour = EvSparse (trig f event behaviour)
@@ -175,18 +182,18 @@ scan f acc (EvDense ev) =
       ( let (x ::: xs) = adv ev
             acc' = unbox f acc x
             EvDense rest = scan f acc' (EvDense xs)
-            in acc' ::: rest
+         in acc' ::: rest
       )
 scan f acc (EvSparse ev) =
   EvSparse $
-  delay
-    ( let (x ::: xs) = adv ev
-      in case x of
-        Just' x' -> 
-          let acc' = unbox f acc x'
-              EvSparse rest = scan f acc' (EvSparse xs)
-              in Just' acc' ::: rest
-        Nothing' -> 
-          let EvSparse rest = scan f acc (EvSparse xs)
-          in Just' acc ::: rest
-    )
+    delay
+      ( let (x ::: xs) = adv ev
+         in case x of
+              Just' x' ->
+                let acc' = unbox f acc x'
+                    EvSparse rest = scan f acc' (EvSparse xs)
+                 in Just' acc' ::: rest
+              Nothing' ->
+                let EvSparse rest = scan f acc (EvSparse xs)
+                 in Just' acc ::: rest
+      )
