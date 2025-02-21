@@ -189,7 +189,7 @@ instance IsWidget' TextField' where
 mkTextField' :: Text -> C TextField'
 mkTextField' txt = do
   c <- chan
-  let (Ev d) = mkEv (box (wait c))
+  let (EvDense d) = mkEv (box (wait c))
   let beh = Beh $ WidgetRattus.Signal.map (box K) (txt ::: d)
   return $ TextField' beh c
 

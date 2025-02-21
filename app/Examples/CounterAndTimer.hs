@@ -10,8 +10,7 @@ module Main where
 import Behaviour
 import Event
 import WidgetRattus
-
-import Widgets 
+import Widgets
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
 counterAndTimer :: C VStack'
@@ -20,7 +19,8 @@ counterAndTimer = do
   text <- mkLabel' elapsedTime'
   btn <- mkButton' timeBehaviour
   let ev = btnOnClick btn
-  lbl <- mkLabel' $ Event.scanB (box (\n _ -> n + 1 :: Int)) 0 ev
+  let ev' = Event.scan (box (\n _ -> n + 1 :: Int)) 0 ev
+  lbl <- mkLabel' $ Event.stepper 0 ev'
   mkConstVStack' (text :* lbl :* btn)
 
 main :: IO ()
