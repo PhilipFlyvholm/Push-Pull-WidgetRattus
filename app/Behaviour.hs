@@ -1,22 +1,22 @@
+{-# HLINT ignore "Eta reduce" #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
+{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE RankNTypes #-}
-{-# HLINT ignore "Eta reduce" #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Behaviour where
 
 import Primitives
 import WidgetRattus
-import WidgetRattus.Signal hiding (const, switch)
+import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockUnion, inputInClock)
+import WidgetRattus.Signal hiding (const, jump, switch)
 import Prelude hiding (const, map, zipWith)
-import WidgetRattus.InternalPrimitives (Continuous(..), O (Delay), inputInClock, adv', clockUnion)
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
@@ -69,7 +69,6 @@ switch (Beh (x ::: xs)) d =
             Both _ (Beh d') -> d'
         )
 
-
 -- | This function is a variant of combines the values of two signals
 -- using the function argument. @zipWith f xs ys@ produces a new value
 -- @unbox f x y@ whenever @xs@ or @ys@ produce a new value, where @x@
@@ -102,16 +101,19 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     app (K x') (Fun y') = Fun (box (unbox f x' . unbox y'))
 
 -- | Variant of 'zipWith' with three behaviours.
-zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box(a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
+zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box (a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
 zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
-  where cds :: Beh (Box (c -> d))
-        cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
+  where
+    cds :: Beh (Box (c -> d))
+    cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
 
-instance Continuous a => Continuous (Beh a) where
-    progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
-        if inputInClock inp cl then Beh(adv' xs inp)
-        else progressInternal inp (Beh (x ::: xs))
-    progressAndNext inp (Beh (x ::: xs@(Delay cl _))) =
-        if inputInClock inp cl then let n = adv' xs inp in (Beh n, nextProgress n)
-        else let (n , cl') = progressAndNext inp x in (Beh(n ::: xs) , cl `clockUnion` cl')
-    nextProgress (Beh (x ::: (Delay cl _))) = nextProgress x `clockUnion` cl
+instance (Continuous a) => Continuous (Beh a) where
+  progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
+    if inputInClock inp cl
+      then Beh (adv' xs inp)
+      else progressInternal inp (Beh (x ::: xs))
+  progressAndNext inp (Beh (x ::: xs@(Delay cl _))) =
+    if inputInClock inp cl
+      then let n = adv' xs inp in (Beh n, nextProgress n)
+      else let (n, cl') = progressAndNext inp x in (Beh (n ::: xs), cl `clockUnion` cl')
+  nextProgress (Beh (x ::: (Delay cl _))) = nextProgress x `clockUnion` cl

@@ -17,25 +17,22 @@ import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith
 import Data.Text
 import Primitives
 
-roundNominalDiffTime :: NominalDiffTime -> Integer
-roundNominalDiffTime = round . toRational
-
 counterAndTimer :: C VStack'
 counterAndTimer = do
   startElapsedTime <- elapsedTime
 
-  resetBtn <- mkButton' (const (K ("reset timer" :: Text)))
+  maxSlider <- mkSlider' 50 (const (K 1)) (const (K 100))
+  resetBtn <- mkButton' (const (K ("Reset timer" :: Text)))
   let lastReset = stepper 0 $ triggerAwait (box (\_ n -> n)) (btnOnClick resetBtn) startElapsedTime
 
-  let currentTimer = Behaviour.zipWith (box (-)) startElapsedTime lastReset
+  let maxSig = sldCurr maxSlider
+  let timeSinceLastReset = Behaviour.zipWith (box (-)) startElapsedTime lastReset
+  let currentTimer = Behaviour.zipWith (box (Prelude.min . round . toRational)) timeSinceLastReset maxSig
 
-  text <- mkLabel' (Behaviour.map (box (toText . round . toRational)) currentTimer)
-
-  counterBtn <- mkButton' timeBehaviour
-  let counterEv = scan (box (\n _ -> n + 1 :: Int)) 0 $ btnOnClick counterBtn
-
-  lbl <- mkLabel' $ stepper 0 counterEv
-  mkConstVStack' (text :* lbl :* counterBtn :* resetBtn)
+  maxText <- mkLabel' (Behaviour.map (box (\n -> "Max: " <>  toText n)) maxSig)
+  text <- mkLabel' (Behaviour.map (box (\n -> "Current: " <>  toText n)) currentTimer)
+  pb <- mkProgressBar' (const (K 0)) maxSig currentTimer
+  mkConstVStack' (maxText :* maxSlider :* text :* resetBtn :* pb)
 
 main :: IO ()
 main = runApplication' counterAndTimer

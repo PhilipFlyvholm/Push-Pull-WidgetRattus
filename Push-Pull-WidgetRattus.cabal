@@ -1,24 +1,16 @@
 cabal-version: 3.0
-
 name: Push-Pull-WidgetRattus
-
 version: 0.1.0.0
 -- A short (one-line) description of the package.
 -- synopsis:
-
 -- A longer description of the package.
 -- description:
-
 license: Apache-2.0
 license-file: LICENSE
-
 author: Philip Flyvholm & Lasse Faurby
-
 maintainer: phif@itu.dk
-
 -- A copyright notice.
 -- copyright:
-
 build-type: Simple
 extra-doc-files: CHANGELOG.md
 
@@ -48,4 +40,8 @@ executable flight
 
 executable timer
   import: shared-settings
-  main-is: Examples/CounterAndTimer.hs
+  main-is: Examples/Timer.hs
+
+executable counter
+  import: shared-settings
+  main-is: Examples/Counter.hs

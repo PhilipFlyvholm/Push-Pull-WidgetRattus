@@ -14,13 +14,12 @@ module Widgets where
 import Behaviour
 import Event
 import WidgetRattus
-import WidgetRattus.Widgets hiding (btnClick, popChild, popEvent, popCurr)
+import WidgetRattus.Widgets hiding (sldMax, sldMin, sldEvent, sldCurr, btnClick, popChild, popEvent, popCurr)
 import qualified WidgetRattus.Widgets.InternalTypes as WR
 import Primitives
 import Data.Text
-import WidgetRattus.Widgets.InternalTypes (HStack(HStack))
 import WidgetRattus.Signal (Sig ((:::)), map)
-import Prelude hiding (max, min)
+import Prelude hiding (max)
 
 class (Continuous a) => IsWidget' a where
   mkOldWidget :: a -> C Widget
@@ -59,7 +58,7 @@ continuous ''HStack'
 instance IsWidget' HStack' where
       mkOldWidget (HStack' ws) = do
         ws' <- discretize ws
-        return $ WR.mkWidget (HStack ws')
+        return $ WR.mkWidget (WR.HStack ws')
 
 mkHStack' :: IsWidget a => Beh(List a) -> C HStack'
 mkHStack' wl = do
@@ -139,8 +138,8 @@ instance IsWidget' Slider' where
     max' <- discretize max
     return $ WR.mkWidget (WR.Slider curr' ev min' max')
 
-mkSlider :: Int -> Beh Int -> Beh Int -> C Slider'
-mkSlider start min max = do
+mkSlider' :: Int -> Beh Int -> Beh Int -> C Slider'
+mkSlider' start min max = do
   c <- chan
   let curr = Event.stepper start $ mkEv (box (wait c))
   return $ Slider' curr c min max
@@ -193,6 +192,13 @@ mkTextField' txt = do
   let beh = Beh $ WidgetRattus.Signal.map (box K) (txt ::: d)
   return $ TextField' beh c
 
+-- ProgressBar
+mkProgressBar' :: Beh Int -> Beh Int -> Beh Int -> C Slider'
+mkProgressBar' min max curr = do
+      c <- chan
+      let boundedCurrent = Behaviour.zipWith (box Prelude.min) curr max
+      return Slider'{sldCurr = boundedCurrent, sldEvent = c, sldMin = min, sldMax = max}
+
 btnOnClick :: Button' -> Ev ()
 btnOnClick b =
   let ch = btnClick b
@@ -207,11 +213,11 @@ runApplication' w =
 
 data Widget' where
   Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
- 
+
 
 continuous ''Widget'
 instance IsWidget' Widget' where
   mkOldWidget (Widget' w beh) = do
-    beh' <- discretize beh 
+    beh' <- discretize beh
     w' <- mkOldWidget w
     return (WR.Widget w' beh')
