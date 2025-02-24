@@ -8,6 +8,7 @@ import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
 import WidgetRattus.Signal hiding (interleave, scan)
+import Prelude hiding (filter)
 
 data Ev a
   = EvDense !(O (Sig a))
@@ -197,3 +198,25 @@ scan f acc (EvSparse ev) =
                 let EvSparse rest = scan f acc (EvSparse xs)
                  in Just' acc ::: rest
       )
+
+filter :: Box (a -> Bool) -> Ev a -> Ev a
+filter f (EvDense ev) = EvSparse (
+    delay (
+      let
+        (x ::: xs) = adv ev
+        (EvSparse rest) = filter f (EvDense xs)
+        in
+        (if unbox f x then Just' x else Nothing' ) ::: rest
+    )
+  )
+filter f (EvSparse ev) = EvSparse (
+  delay (
+    let
+        (x ::: xs) = adv ev
+        (EvSparse rest) = filter f (EvSparse xs)
+        in
+          case x of
+            Just' x' -> (if unbox f x' then Just' x' else Nothing' ) ::: rest
+            Nothing' -> Nothing' ::: rest
+    )
+  )
