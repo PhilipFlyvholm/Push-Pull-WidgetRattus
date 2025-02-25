@@ -13,42 +13,38 @@ import Data.Text.Read
 import Widgets
 import Behaviour
 import Primitives
-import WidgetRattus.Signal (Sig((:::)))
 import Event
 
 -- Benchmark 2
-celsiusToFahrenheit :: Text -> Text
-celsiusToFahrenheit t =
-        case signed decimal t of
-            Right (t', _) -> toText (t' * 9 `div` 5 + 32)
-            Left _ -> "Invalid input"
+celsiusToFahrenheit :: Int -> Int
+celsiusToFahrenheit t = t * 9 `div` 5 + 32
 
-fahrenheitToCelsius :: Text -> Text
-fahrenheitToCelsius t =
+fahrenheitToCelsius :: Int -> Int
+fahrenheitToCelsius t = (t - 32) * 5 `div` 9
+
+isNumber :: Text -> Maybe' Int
+isNumber "" = Just' 0
+isNumber t =
     case signed decimal t of
-        Right (t', _) -> toText ((t' - 32) * 5 `div` 9)
-        Left _ -> "Invalid input"
-
-addInputBehTF :: TextField' -> Beh Text -> TextField'
-addInputBehTF tf (Beh(_ ::: xs)) =
-    let Beh(y ::: ys) = tfContent tf
-        -- didnt work with behaviours out of the box
-        -- rest = zipWith (box (\x _ -> x)) b' b
-        -- instead we have used future beh as ev
-        EvDense rest = Event.interleave (box (\x _ -> x)) (EvDense ys) (EvDense xs)
-        content = y ::: rest
-    in tf{tfContent = Beh content, tfInput = tfInput tf}
+        Right (t', "") -> Just' t'
+        _ -> Nothing'
 
 window :: C HStack'
 window = do
     tfF1 <- mkTextField' "32"
     tfC1 <- mkTextField' "0"
 
-    let convertFtoC = Behaviour.map (box fahrenheitToCelsius) (tfContent tfF1)
-    let convertCtoF = Behaviour.map (box celsiusToFahrenheit) (tfContent tfC1)
+    let fEvent = Event.filterMap (box isNumber) (textFieldOnInput tfF1)
+    let cEvent = Event.filterMap (box isNumber) (textFieldOnInput tfC1)
 
-    let tfF2 = addInputBehTF tfF1 convertCtoF
-    let tfC2 = addInputBehTF tfC1 convertFtoC
+    let convertFtoC = Event.map (box fahrenheitToCelsius) fEvent
+    let convertCtoF = Event.map (box celsiusToFahrenheit) cEvent
+
+    let c = stepper 0 (interleave (box (\x _ -> x)) cEvent convertFtoC)
+    let f = stepper 32 (interleave (box (\x _ -> x)) fEvent convertCtoF)
+
+    let tfF2 = setInputBehTF tfF1 (Behaviour.map (box toText) f)
+    let tfC2 = setInputBehTF tfC1 (Behaviour.map (box toText) c)
 
     fLabel <- mkLabel' (const (K ("Fahrenheit" :: Text)))
     cLabel <- mkLabel' (const (K ("Celsius" :: Text)))

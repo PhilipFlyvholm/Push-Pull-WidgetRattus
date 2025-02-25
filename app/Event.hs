@@ -199,24 +199,27 @@ scan f acc (EvSparse ev) =
                  in Just' acc ::: rest
       )
 
-filter :: Box (a -> Bool) -> Ev a -> Ev a
-filter f (EvDense ev) = EvSparse (
+filterMap :: Box (a -> Maybe' b) -> Ev a -> Ev b
+filterMap f (EvDense ev) = EvSparse (
     delay (
       let
         (x ::: xs) = adv ev
-        (EvSparse rest) = filter f (EvDense xs)
+        (EvSparse rest) = filterMap f (EvDense xs)
         in
-        (if unbox f x then Just' x else Nothing' ) ::: rest
+        unbox f x ::: rest
     )
   )
-filter f (EvSparse ev) = EvSparse (
+filterMap f (EvSparse ev) = EvSparse (
   delay (
     let
         (x ::: xs) = adv ev
-        (EvSparse rest) = filter f (EvSparse xs)
+        (EvSparse rest) = filterMap f (EvSparse xs)
         in
           case x of
-            Just' x' -> (if unbox f x' then Just' x' else Nothing' ) ::: rest
+            Just' x' -> unbox f x' ::: rest
             Nothing' -> Nothing' ::: rest
     )
   )
+
+filter :: Box (a -> Bool) -> Ev a -> Ev a
+filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))

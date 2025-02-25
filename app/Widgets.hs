@@ -14,7 +14,7 @@ module Widgets where
 import Behaviour
 import Event
 import WidgetRattus
-import WidgetRattus.Widgets hiding (sldMax, sldMin, sldEvent, sldCurr, btnClick, popChild, popEvent, popCurr)
+import WidgetRattus.Widgets hiding (tfContent, tfInput, sldMax, sldMin, sldEvent, sldCurr, btnClick, popChild, popEvent, popCurr)
 import qualified WidgetRattus.Widgets.InternalTypes as WR
 import Primitives
 import Data.Text
@@ -203,6 +203,15 @@ btnOnClick :: Button' -> Ev ()
 btnOnClick b =
   let ch = btnClick b
    in mkEv (box (wait ch))
+
+textFieldOnInput :: TextField' -> Ev Text
+textFieldOnInput tf =
+  let ch = tfInput tf
+  in mkEv (box (wait ch))
+
+setInputBehTF :: TextField' -> Beh Text -> TextField'
+setInputBehTF tf b =
+  tf{tfContent = b}
 
 runApplication' :: IsWidget' a => C a -> IO()
 runApplication' w =
