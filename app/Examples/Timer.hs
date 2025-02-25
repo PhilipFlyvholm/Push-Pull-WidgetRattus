@@ -17,13 +17,15 @@ import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith
 import Data.Text
 import Primitives
 
-counterAndTimer :: C VStack'
-counterAndTimer = do
+timerExample :: C VStack'
+timerExample = do
   startElapsedTime <- elapsedTime
 
   maxSlider <- mkSlider' 50 (const (K 1)) (const (K 100))
   resetBtn <- mkButton' (const (K ("Reset timer" :: Text)))
-  let lastReset = stepper 0 $ triggerAwait (box (\_ n -> n)) (btnOnClick resetBtn) startElapsedTime
+  let trig = Event.triggerAwait (box (\_ y -> y)) (btnOnClick resetBtn) startElapsedTime
+  let resetEv = Event.filter (box (> 5)) trig
+  let lastReset = stepper 0 $ triggerAwait (box (\_ n -> n)) resetEv startElapsedTime
 
   let maxSig = sldCurr maxSlider
   let timeSinceLastReset = Behaviour.zipWith (box (-)) startElapsedTime lastReset
@@ -35,4 +37,4 @@ counterAndTimer = do
   mkConstVStack' (maxText :* maxSlider :* text :* resetBtn :* pb)
 
 main :: IO ()
-main = runApplication' counterAndTimer
+main = runApplication' timerExample
