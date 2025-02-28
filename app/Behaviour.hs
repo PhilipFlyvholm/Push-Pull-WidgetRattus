@@ -10,6 +10,7 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
+
 module Behaviour where
 
 import Primitives
@@ -24,7 +25,7 @@ const :: Fun Time a -> Beh a
 const x = Beh (x ::: never)
 
 timeBehaviour :: Beh Time
-timeBehaviour = const (Fun (box id))
+timeBehaviour = const (Fun (box (\t -> t :* False)))
 
 map :: Box (a -> b) -> Beh a -> Beh b
 map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
@@ -38,21 +39,25 @@ discretize (Beh (K x ::: xs)) = do
   return $ x ::: rest
 discretize (Beh (Fun f ::: xs)) = do
   t <- time
-  let cur = unbox f t
+  let (cur :* b) = unbox f t
+
   let rest =
-        delayC $
-          delay
-            ( case select xs sampleInterval of
-                Fst x _ -> discretize (Beh x)
-                Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
-                Both x _ -> discretize (Beh x)
-            )
+        if b
+          then never
+          else
+            delayC $
+              delay
+                ( case select xs sampleInterval of
+                    Fst x _ -> discretize (Beh x)
+                    Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
+                    Both x _ -> discretize (Beh x)
+                )
   return (cur ::: rest)
 
 elapsedTime :: C (Beh NominalDiffTime)
 elapsedTime = do
   startTime <- time
-  return $ Beh (Fun (box (\currentTime -> diffTime currentTime startTime)) ::: never)
+  return $ Beh (Fun (box (\currentTime -> diffTime currentTime startTime :* False)) ::: never)
 
 withTime :: O (Time -> a) -> O a
 withTime delayed =
@@ -96,9 +101,34 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     )
   where
     app (K x') (K y') = K (unbox f x' y')
-    app (Fun x') (Fun y') = Fun (box (\t -> unbox f (unbox x' t) (unbox y' t)))
-    app (Fun x') (K y') = Fun (box (\t -> unbox f (unbox x' t) y'))
-    app (K x') (Fun y') = Fun (box (unbox f x' . unbox y'))
+    app (Fun x') (Fun y') =
+      Fun
+        ( box
+            ( \t ->
+                let (a :* ab) = unbox x' t
+                    (b :* bb) = unbox y' t
+                    left = unbox f a b
+                 in left :* ab || bb
+            )
+        )
+    app (Fun x') (K y') =
+      Fun
+        ( box
+            ( \t ->
+                let (a :* ab) = unbox x' t
+                    left = unbox f a y'
+                 in left :* ab
+            )
+        )
+    app (K x') (Fun y') =
+      Fun
+        ( box
+            ( \t ->
+                let (b :* bb) = unbox y' t
+                    left = unbox f x' b
+                 in left :* bb
+            )
+        )
 
 -- | Variant of 'zipWith' with three behaviours.
 zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box (a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
@@ -106,6 +136,16 @@ zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
   where
     cds :: Beh (Box (c -> d))
     cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
+
+stop :: Box (a -> Bool) -> Beh a -> Beh a
+stop f (Beh (x ::: xs)) =
+  let cur = mapFBool f x
+      rest = delay (
+          let (Beh s) = Behaviour.stop f (Beh (adv xs))
+          in s
+        )
+  in Beh (cur ::: rest)
+
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
