@@ -19,6 +19,7 @@ common shared-settings
     Behaviour
     Event
     Primitives
+    Primitives2
     Widgets
 
   build-depends:
