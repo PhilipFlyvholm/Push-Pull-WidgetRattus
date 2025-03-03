@@ -142,6 +142,8 @@ stop p (Beh s) = Beh (run s)
     run (K x ::: xs) = K x ::: if unbox p x then never else delay (run (adv xs))
     run (Fun f ::: xs) = Fun (box (\t -> let (a :* b) = unbox f t in (a :* (unbox p a || b)))) ::: delay (run (adv xs))
 
+
+
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
     if inputInClock inp cl

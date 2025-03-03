@@ -7,7 +7,7 @@ import Behaviour
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (interleave, scan)
+import WidgetRattus.Signal hiding (switchR, interleave, scan)
 import Prelude hiding (filter)
 
 data Ev a
@@ -223,3 +223,27 @@ filterMap f (EvSparse ev) = EvSparse (
 
 filter :: Box (a -> Bool) -> Ev a -> Ev a
 filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))
+
+
+switchR :: (Stable a) => Beh a -> Ev (Beh a) -> Beh a
+switchR (Beh (x ::: xs)) (EvDense ev) =
+  let rest = 
+        delay (
+          case select xs ev of
+            Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvDense ev') in b
+            Snd _ (y ::: ys) -> let (Beh b) = switchR y (EvDense ys) in b
+            Both _ (y ::: ys) -> let (Beh b) = switchR y (EvDense ys) in b
+        )
+  in Beh (x:::rest)
+switchR (Beh (x ::: xs)) (EvSparse ev) =
+  let rest =
+        delay (
+          case select xs ev of
+            Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvSparse ev') in b
+            Snd _ (Just' y ::: ys) -> let (Beh b) = switchR y (EvSparse ys) in b
+            Snd xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh (x ::: xs')) (EvSparse ys) in b
+            Both _ (Just' y ::: ys) -> let (Beh b) = switchR y (EvSparse ys) in b
+            Both xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh xs') (EvSparse ys) in b
+            
+        )
+  in Beh (x ::: rest)

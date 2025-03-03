@@ -1,12 +1,9 @@
-{-# HLINT ignore "Evaluate" #-}
-{-# HLINT ignore "Use const" #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE InstanceSigs #-}
-
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Main where
 
 import Behaviour
@@ -16,6 +13,7 @@ import Widgets
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 import Data.Text
 import Primitives
+
 
 timerExample :: C VStack'
 timerExample = do
@@ -29,13 +27,17 @@ timerExample = do
 
   let maxSig = sldCurr maxSlider
   let timeSinceLastReset = Behaviour.zipWith (box (-)) startElapsedTime lastReset
-  let currentTimer = Behaviour.zipWith (box (\a b -> (round (toRational a), b))) timeSinceLastReset maxSig
-  let stoppedCurrentTimer = Behaviour.stop (box (uncurry (>=))) currentTimer
-  let displayTimer = Behaviour.map (box fst) stoppedCurrentTimer
+  let currentTimer = Behaviour.zipWith (box (\a b -> round (toRational a) :* b)) timeSinceLastReset maxSig
+  let stoppedCurrentTimer = Behaviour.stop (box (\(a :* b) -> a >= b)) currentTimer
+  let d = Event.scan (box (\b a -> b)) (currentTimer) resetEv
+
+  let stoppedCurrentTimerRecursive = Event.switchR stoppedCurrentTimer d
+  let displayTimer = Behaviour.map (box (\(cur :* _) -> cur)) stoppedCurrentTimerRecursive
   maxText <- mkLabel' (Behaviour.map (box (\n -> "Max: " <>  toText n)) maxSig)
   text <- mkLabel' (Behaviour.map (box (\n -> "Current: " <>  toText n)) displayTimer)
+  text' <- mkLabel' (Behaviour.map (box (\n -> "Current (raw): " <>  toText n)) currentTimer)
   pb <- mkProgressBar' (const (K 0)) maxSig displayTimer
-  mkConstVStack' (maxText :* maxSlider :* text :* resetBtn :* pb)
+  mkConstVStack' (maxText :* maxSlider :* text :* text' :* resetBtn :* pb)
 
 main :: IO ()
 main = runApplication' timerExample
