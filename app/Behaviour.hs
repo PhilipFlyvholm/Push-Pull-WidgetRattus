@@ -10,7 +10,6 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-
 module Behaviour where
 
 import Primitives
@@ -138,14 +137,10 @@ zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
     cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
 
 stop :: Box (a -> Bool) -> Beh a -> Beh a
-stop f (Beh (x ::: xs)) =
-  let cur = mapFBool f x
-      rest = delay (
-          let (Beh s) = Behaviour.stop f (Beh (adv xs))
-          in s
-        )
-  in Beh (cur ::: rest)
-
+stop p (Beh s) = Beh (run s)
+  where
+    run (K x ::: xs) = K x ::: if unbox p x then never else delay (run (adv xs))
+    run (Fun f ::: xs) = Fun (box (\t -> let (a :* b) = unbox f t in (a :* (unbox p a || b)))) ::: delay (run (adv xs))
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
