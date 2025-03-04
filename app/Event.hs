@@ -234,24 +234,37 @@ filterMap f (EvSparse ev) =
 filter :: Box (a -> Bool) -> Ev a -> Ev a
 filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))
 
-switchR :: (Stable a) => Beh a -> Ev (Fun Time a -> Beh a) -> Beh a
-switchR (Beh (x ::: xs)) (EvDense ev) =
-  let rest =
-        delay
-          ( case select xs ev of
-              Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvDense ev') in b
-              Snd _ (f ::: ys) -> let (Beh b) = switchR (f x) (EvDense ys) in b
-              Both _ (f ::: ys) -> let (Beh b) = switchR (f x) (EvDense ys) in b
-          )
-   in Beh (x ::: rest)
+switchR :: (Stable a) => Beh a -> Ev (a -> Beh a) -> C (Beh a)
+switchR (Beh (x ::: xs)) (EvDense ev) = 
+  do 
+    let rest =
+          delayC
+            ( delay
+                ( do
+                    t <- time
+                    return
+                      ( case select xs ev of
+                          Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvDense ev') in b
+                          Snd _ (f ::: ys) -> let (Beh b) = switchR (f (apply x t)) (EvDense ys) in b
+                          Both _ (f ::: ys) -> let (Beh b) = switchR (f (apply x t)) (EvDense ys) in b
+                      )
+                )
+            )
+    return (Beh (x ::: rest))
 switchR (Beh (x ::: xs)) (EvSparse ev) =
   let rest =
-        delay
-          ( case select xs ev of
-              Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvSparse ev') in b
-              Snd _ (Just' f ::: ys) -> let (Beh b) = switchR (f x) (EvSparse ys) in b
-              Snd xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh (x ::: xs')) (EvSparse ys) in b
-              Both _ (Just' f ::: ys) -> let (Beh b) = switchR (f x) (EvSparse ys) in b
-              Both xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh xs') (EvSparse ys) in b
+        delayC
+          ( delay
+              ( do
+                  t <- time
+                  return
+                    ( case select xs ev of
+                        Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvSparse ev') in b
+                        Snd _ (Just' f ::: ys) -> let (Beh b) = switchR (f (apply x t)) (EvSparse ys) in b
+                        Snd xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh (x ::: xs')) (EvSparse ys) in b
+                        Both _ (Just' f ::: ys) -> let (Beh b) = switchR (f (apply x t)) (EvSparse ys) in b
+                        Both xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh xs') (EvSparse ys) in b
+                    )
+              )
           )
    in Beh (x ::: rest)
