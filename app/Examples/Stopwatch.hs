@@ -40,7 +40,7 @@ timerExample = do
 
   let input = Event.interleave (box (\x _ -> x)) startTime stopTime
   let stopWatchSig :: Beh NominalDiffTime =
-        switchR (const (K 0)) input
+        switchR (constK 0) input
 
   timeLab <- mkLabel' startElapsedTime
   stopWatchLab <- mkLabel' stopWatchSig
