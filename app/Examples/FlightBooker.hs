@@ -8,7 +8,6 @@ import Widgets
 import WidgetRattus
 import Behaviour
 import Event
-import Primitives
 import Data.Text (Text)
 import Prelude hiding (zipWith3, const, map)
 
@@ -61,10 +60,10 @@ bookingToText oneWay dep ret =
 
 flightBooker :: C VStack'
 flightBooker = do
-      flightTypeDropdown <- mkTextDropdown' (const (K ["One-Way", "Return-Flight"])) "One-Way"
+      flightTypeDropdown <- mkTextDropdown' (constK ["One-Way", "Return-Flight"]) "One-Way"
       departureDateField <- mkTextField' "01-01-2021"
       returnDateField <- mkTextField' "01-02-2021"
-      bookButton <- mkButton' (Behaviour.const (K ("Book" :: Text)))
+      bookButton <- mkButton' (mkConstText "Book")
       
       let isReturnFlight = Behaviour.map (box (== "Return-Flight")) (tddCurr flightTypeDropdown)
       let isOneWayFlight = Behaviour.map (box (== "One-Way")) (tddCurr flightTypeDropdown)
@@ -75,7 +74,7 @@ flightBooker = do
       
       summaryLabel <- mkLabel' bookingSummary
       summaryLabel' <- mkOldWidget summaryLabel
-      summaryPopup <- mkPopup' triggerPopup (const (K summaryLabel'))
+      summaryPopup <- mkPopup' triggerPopup (constK summaryLabel')
 
       let departureDateFieldIsDate = Behaviour.map (box isDate) (tfContent departureDateField)
       let departureDateFieldIsLater = Behaviour.zipWith (box isLater) (tfContent departureDateField) (tfContent returnDateField)

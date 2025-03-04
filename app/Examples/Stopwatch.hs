@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# HLINT ignore "Evaluate" #-}
 {-# HLINT ignore "Use const" #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
@@ -9,7 +8,6 @@
 module Main where
 
 import Behaviour
-import Data.Text
 import Event
 import Primitives
 import WidgetRattus
@@ -17,34 +15,28 @@ import WidgetRattus.Signal (Sig ((:::)))
 import Widgets
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
-elapsedTime' :: C (Fun Time NominalDiffTime -> Beh NominalDiffTime)
+elapsedTime' :: C (NominalDiffTime -> Beh NominalDiffTime)
 elapsedTime' =
   do
     startTime <- time
-    return (\f -> Beh (Fun (box (\currentTime -> (apply f startTime + diffTime currentTime startTime) :* False)) ::: never))
-
-cacheFunTime :: C (Fun Time NominalDiffTime -> Beh NominalDiffTime)
-cacheFunTime =
-  do
-    t <- time
-    return (\f -> const (K (apply f t)))
+    return (\f -> Beh (Fun (box (\currentTime -> (f + diffTime currentTime startTime) :* False)) ::: never))
 
 timerExample :: C VStack'
 timerExample = do
   startElapsedTime <- elapsedTime
 
-  startBtn <- mkButton' (const (K ("Start" :: Text)))
+  startBtn <- mkButton' (mkConstText "Start")
   let startEv = btnOnClick startBtn
-  stopBtn <- mkButton' (const (K ("Stop" :: Text)))
+  stopBtn <- mkButton' (mkConstText "Stop")
   let stopEv = btnOnClick stopBtn
 
-  let startTime :: Ev (Fun Time NominalDiffTime -> Beh NominalDiffTime) =
+  let startTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
         mkEv' (box (delay (let _ = adv (unbox startEv) in elapsedTime')))
-  let stopTime :: Ev (Fun Time NominalDiffTime -> Beh NominalDiffTime) = 
-        mkEv' (box (delay (let _ = adv (unbox stopEv) in cacheFunTime)))
+  let stopTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
+        mkEv (box (delay (let _ = adv (unbox stopEv) in const . K)))
 
-  timeLabName <- mkLabel' (const (K ("Current Time:" :: Text)))
-  swLabName <- mkLabel' (const (K ("Elapsed Time:" :: Text)))
+  timeLabName <- mkLabel' (mkConstText "Current Time:")
+  swLabName <- mkLabel' (mkConstText "Elapsed Time:")
 
   let input = Event.interleave (box (\x _ -> x)) startTime stopTime
   let stopWatchSig :: Beh NominalDiffTime =

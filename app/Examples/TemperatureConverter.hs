@@ -1,9 +1,7 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedLists #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Evaluate" #-}
 {-# HLINT ignore "Use const" #-}
 
 import WidgetRattus
@@ -12,7 +10,6 @@ import Data.Text hiding (zipWith, filter, map, all)
 import Data.Text.Read
 import Widgets
 import Behaviour
-import Primitives
 import Event
 
 -- Benchmark 2
@@ -46,8 +43,8 @@ window = do
     let tfF2 = setInputBehTF tfF1 (Behaviour.map (box toText) f)
     let tfC2 = setInputBehTF tfC1 (Behaviour.map (box toText) c)
 
-    fLabel <- mkLabel' (const (K ("Fahrenheit" :: Text)))
-    cLabel <- mkLabel' (const (K ("Celsius" :: Text)))
+    fLabel <- mkLabel' $ mkConstText "Fahrenheit"
+    cLabel <- mkLabel' $ mkConstText "Celsius"
 
     fStack <- mkConstVStack' (tfF2 :* fLabel)
     cStack <- mkConstVStack' (tfC2 :* cLabel)
