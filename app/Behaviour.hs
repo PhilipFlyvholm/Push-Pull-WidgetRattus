@@ -20,14 +20,20 @@ import Prelude hiding (const, map, zipWith)
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
+unwrap :: Beh a -> Sig (Fun Time a)
+unwrap (Beh a) = a
+
 const :: Fun Time a -> Beh a
 const x = Beh (x ::: never)
+
+constK :: a -> Beh a
+constK x = Beh (K x ::: never)
 
 timeBehaviour :: Beh Time
 timeBehaviour = const (Fun (box (\t -> t :* False)))
 
 map :: Box (a -> b) -> Beh a -> Beh b
-map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
+map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (unwrap $ Behaviour.map f (Beh (adv xs))))
 
 sampleInterval :: O ()
 sampleInterval = timer 20000
@@ -68,7 +74,7 @@ switch (Beh (x ::: xs)) d =
     x
       ::: delay
         ( case select xs d of
-            Fst xs' d' -> let (Beh b') = Behaviour.switch (Beh xs') d' in b'
+            Fst xs' d' -> unwrap $ Behaviour.switch (Beh xs') d'
             Snd _ (Beh d') -> d'
             Both _ (Beh d') -> d'
         )

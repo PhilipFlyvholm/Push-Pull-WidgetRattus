@@ -7,6 +7,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Widgets where
@@ -67,7 +68,7 @@ mkHStack' wl = do
 mkConstHStack' :: Widgets' ws => ws -> C HStack'
 mkConstHStack' w = do
   ws <- toWidgetList' w
-  mkHStack' $ Behaviour.const (K ws)
+  mkHStack' $ Behaviour.constK ws
 
 -- VStack
 data VStack' where
@@ -86,7 +87,7 @@ mkVStack' wl = do
 mkConstVStack' :: Widgets' ws => ws -> C VStack'
 mkConstVStack' w = do
   ws <- toWidgetList' w
-  mkVStack' $ Behaviour.const (K ws)
+  mkVStack' $ Behaviour.constK ws
 
 
 -- TextDropDown
@@ -216,6 +217,9 @@ textFieldOnInput tf =
 setInputBehTF :: TextField' -> Beh Text -> TextField'
 setInputBehTF tf b =
   tf{tfContent = b}
+
+mkConstText :: String -> Beh Text
+mkConstText s = constK (pack s)
 
 runApplication' :: IsWidget' a => C a -> IO()
 runApplication' w =
