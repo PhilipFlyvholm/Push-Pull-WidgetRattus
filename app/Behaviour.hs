@@ -30,7 +30,7 @@ map :: Box (a -> b) -> Beh a -> Beh b
 map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
 
 sampleInterval :: O ()
-sampleInterval = timer 200000 -- For some reason is this a second
+sampleInterval = timer 20000
 
 discretize :: Beh a -> C (Sig a)
 discretize (Beh (K x ::: xs)) = do

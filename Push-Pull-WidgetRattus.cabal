@@ -46,6 +46,10 @@ executable counter
   import: shared-settings
   main-is: Examples/Counter.hs
 
+executable stopwatch
+  import: shared-settings
+  main-is: Examples/stopwatch.hs
+
 executable converter
   import: shared-settings
   main-is: Examples/TemperatureConverter.hs
