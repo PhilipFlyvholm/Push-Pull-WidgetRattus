@@ -7,7 +7,7 @@ import Behaviour
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (interleave, scan)
+import WidgetRattus.Signal hiding (interleave, scan, switchR)
 import Prelude hiding (filter)
 
 data Ev a
@@ -21,6 +21,18 @@ mkEv a =
         ( adv (unbox a)
             ::: let EvDense s = mkEv a
                  in s
+        )
+    )
+
+mkEv' :: Box (O (C a)) -> Ev a
+mkEv' b =
+  EvDense
+    ( delayC
+        ( delay
+            ( do
+                a <- adv (unbox b)
+                return (a ::: let (EvDense s) = mkEv' b in s)
+            )
         )
     )
 
@@ -49,11 +61,11 @@ map f (EvSparse sig) =
         )
     )
 
-stepper :: Stable a => a -> Ev a -> Beh a
+stepper :: (Stable a) => a -> Ev a -> Beh a
 stepper initial event =
   Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait initial event) in sig))
 
-stepperAwait :: Stable a => a -> Ev a -> O (Beh a)
+stepperAwait :: (Stable a) => a -> Ev a -> O (Beh a)
 stepperAwait _ (EvDense ev) =
   delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (let (Beh ev') = adv (stepperAwait x (EvDense xs)) in ev')))
 stepperAwait initial (EvSparse ev) =
@@ -200,26 +212,46 @@ scan f acc (EvSparse ev) =
       )
 
 filterMap :: Box (a -> Maybe' b) -> Ev a -> Ev b
-filterMap f (EvDense ev) = EvSparse (
-    delay (
-      let
-        (x ::: xs) = adv ev
-        (EvSparse rest) = filterMap f (EvDense xs)
-        in
-        unbox f x ::: rest
+filterMap f (EvDense ev) =
+  EvSparse
+    ( delay
+        ( let (x ::: xs) = adv ev
+              (EvSparse rest) = filterMap f (EvDense xs)
+           in unbox f x ::: rest
+        )
     )
-  )
-filterMap f (EvSparse ev) = EvSparse (
-  delay (
-    let
-        (x ::: xs) = adv ev
-        (EvSparse rest) = filterMap f (EvSparse xs)
-        in
-          case x of
-            Just' x' -> unbox f x' ::: rest
-            Nothing' -> Nothing' ::: rest
+filterMap f (EvSparse ev) =
+  EvSparse
+    ( delay
+        ( let (x ::: xs) = adv ev
+              (EvSparse rest) = filterMap f (EvSparse xs)
+           in case x of
+                Just' x' -> unbox f x' ::: rest
+                Nothing' -> Nothing' ::: rest
+        )
     )
-  )
 
 filter :: Box (a -> Bool) -> Ev a -> Ev a
 filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))
+
+switchR :: (Stable a) => Beh a -> Ev (Fun Time a -> Beh a) -> Beh a
+switchR (Beh (x ::: xs)) (EvDense ev) =
+  let rest =
+        delay
+          ( case select xs ev of
+              Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvDense ev') in b
+              Snd _ (f ::: ys) -> let (Beh b) = switchR (f x) (EvDense ys) in b
+              Both _ (f ::: ys) -> let (Beh b) = switchR (f x) (EvDense ys) in b
+          )
+   in Beh (x ::: rest)
+switchR (Beh (x ::: xs)) (EvSparse ev) =
+  let rest =
+        delay
+          ( case select xs ev of
+              Fst xs' ev' -> let (Beh b) = switchR (Beh xs') (EvSparse ev') in b
+              Snd _ (Just' f ::: ys) -> let (Beh b) = switchR (f x) (EvSparse ys) in b
+              Snd xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh (x ::: xs')) (EvSparse ys) in b
+              Both _ (Just' f ::: ys) -> let (Beh b) = switchR (f x) (EvSparse ys) in b
+              Both xs' (Nothing' ::: ys) -> let (Beh b) = switchR (Beh xs') (EvSparse ys) in b
+          )
+   in Beh (x ::: rest)

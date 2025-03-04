@@ -19,7 +19,7 @@ import Primitives
 counterAndTimer :: C VStack'
 counterAndTimer = do
   counterBtn <- mkButton' (const (K ("Increment" :: Text)))
-  let counterEv = scan (box (\n _ -> n + 1 :: Int)) 0 $ btnOnClick counterBtn
+  let counterEv = scan (box (\n _ -> n + 1 :: Int)) 0 $ btnOnClickEv counterBtn
 
   lbl <- mkLabel' $ stepper 0 counterEv
   mkConstVStack' (lbl :* counterBtn)

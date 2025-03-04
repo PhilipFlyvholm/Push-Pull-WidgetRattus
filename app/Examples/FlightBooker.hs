@@ -71,7 +71,7 @@ flightBooker = do
       
       let bookingSummary = zipWith3 (box bookingToText) isOneWayFlight (tfContent departureDateField) (tfContent returnDateField)
 
-      let triggerPopup = scan (box (\_ _ -> True)) False (btnOnClick bookButton)
+      let triggerPopup = scan (box (\_ _ -> True)) False (btnOnClickEv bookButton)
       
       summaryLabel <- mkLabel' bookingSummary
       summaryLabel' <- mkOldWidget summaryLabel

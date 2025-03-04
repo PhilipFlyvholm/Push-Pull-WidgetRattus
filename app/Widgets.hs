@@ -14,7 +14,7 @@ module Widgets where
 import Behaviour
 import Event
 import WidgetRattus
-import WidgetRattus.Widgets hiding (tfContent, tfInput, sldMax, sldMin, sldEvent, sldCurr, btnClick, popChild, popEvent, popCurr)
+import WidgetRattus.Widgets hiding (btnOnClick, tfContent, tfInput, sldMax, sldMin, sldEvent, sldCurr, btnClick, popChild, popEvent, popCurr)
 import qualified WidgetRattus.Widgets.InternalTypes as WR
 import Primitives
 import Data.Text
@@ -199,10 +199,14 @@ mkProgressBar' min max curr = do
       let boundedCurrent = Behaviour.zipWith (box Prelude.min) curr max
       return Slider'{sldCurr = boundedCurrent, sldEvent = c, sldMin = min, sldMax = max}
 
-btnOnClick :: Button' -> Ev ()
+btnOnClick :: Button' -> Box(O())
 btnOnClick b =
-  let ch = btnClick b
-   in mkEv (box (wait ch))
+      let ch = btnClick b
+      in box (wait ch)
+
+btnOnClickEv :: Button' -> Ev ()
+btnOnClickEv b = mkEv (btnOnClick b)
+
 
 textFieldOnInput :: TextField' -> Ev Text
 textFieldOnInput tf =

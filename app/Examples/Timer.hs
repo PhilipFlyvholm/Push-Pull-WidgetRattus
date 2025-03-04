@@ -23,7 +23,7 @@ timerExample = do
 
   maxSlider <- mkSlider' 50 (const (K 1)) (const (K 100))
   resetBtn <- mkButton' (const (K ("Reset timer" :: Text)))
-  let trig = Event.triggerAwait (box (\_ y -> y)) (btnOnClick resetBtn) startElapsedTime
+  let trig = Event.triggerAwait (box (\_ y -> y)) (btnOnClickEv resetBtn) startElapsedTime
   let resetEv = Event.filter (box (>= 5)) trig
   let lastReset = stepper 0 $ triggerAwait (box (\_ n -> n)) resetEv startElapsedTime
 
