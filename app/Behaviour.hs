@@ -143,10 +143,29 @@ zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
     cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
 
 stop :: Box (a -> Bool) -> Beh a -> Beh a
-stop p (Beh s) = Beh (run s)
+stop p (Beh b) = Beh (run b)
   where
     run (K x ::: xs) = K x ::: if unbox p x then never else delay (run (adv xs))
     run (Fun f ::: xs) = Fun (box (\t -> let (a :* b) = unbox f t in (a :* (unbox p a || b)))) ::: delay (run (adv xs))
+
+stopWith :: Box (a -> Maybe' a) -> Beh a -> Beh a
+stopWith p (Beh b) = Beh (run b)
+  where
+    run (K x ::: xs) =
+      case unbox p x of
+        Just' a -> K a ::: never
+        Nothing' -> K x ::: delay (run (adv xs))
+    run (Fun f ::: xs) =
+      Fun
+        ( box
+            ( \t ->
+                let (a :* b) = unbox f t
+                 in case unbox p a of
+                      Just' a' -> a' :* True
+                      Nothing' -> a :* b
+            )
+        )
+        ::: delay (run (adv xs))
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =

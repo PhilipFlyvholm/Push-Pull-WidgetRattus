@@ -48,7 +48,7 @@ executable counter
 
 executable stopwatch
   import: shared-settings
-  main-is: Examples/stopwatch.hs
+  main-is: Examples/Stopwatch.hs
 
 executable converter
   import: shared-settings
