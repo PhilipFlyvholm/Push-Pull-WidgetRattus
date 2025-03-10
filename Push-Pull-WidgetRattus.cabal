@@ -53,3 +53,7 @@ executable stopwatch
 executable converter
   import: shared-settings
   main-is: Examples/TemperatureConverter.hs
+
+executable calculator
+  import: shared-settings
+  main-is: Examples/Calculator.hs

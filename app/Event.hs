@@ -1,5 +1,6 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE OverloadedLists #-}
 
 module Event where
 
@@ -7,7 +8,7 @@ import Behaviour
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (interleave, scan, switchR)
+import WidgetRattus.Signal hiding (buffer, interleaveAll, interleave, scan, switchR)
 import Prelude hiding (filter)
 
 data Ev a
@@ -114,6 +115,43 @@ triggerAwait f event behaviour = EvSparse (trig f event behaviour)
                 )
           )
 
+triggerAwaitM :: Stable b => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
+triggerAwaitM f event behaviour = EvDense (trig f event behaviour) where
+  trig :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
+  trig f' (EvDense as) (Beh (b ::: bs)) =
+    delayC $
+      delay (
+        let d = select as bs
+        in (
+          do 
+            t <- time
+            return (
+              case d of
+                Fst (a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvDense as') (Beh (b ::: bs'))
+                Snd as' bs' -> Nothing' ::: trig f' (EvDense as') (Beh bs')
+                Both (a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvDense as') (Beh (b' ::: bs'))
+             )
+          )
+        )   
+  trig f' (EvSparse as) (Beh (b ::: bs)) =
+    delayC $
+      delay (
+        let d = select as bs
+        in (
+          do 
+            t <- time
+            return (
+              case d of
+                Fst (Just' a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvSparse as') (Beh (b ::: bs'))
+                Fst (Nothing' ::: as') bs' -> Nothing' ::: trig f' (EvSparse as') (Beh (b ::: bs'))
+                Snd as' bs' -> Nothing' ::: trig f' (EvSparse as') (Beh bs')
+                Both (Just' a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
+                Both (Nothing' ::: as') (b' ::: bs') -> Nothing' ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
+
+             )
+          )
+        )   
+
 interleave :: Box (a -> a -> a) -> Ev a -> Ev a -> Ev a
 interleave f (EvDense xs) (EvDense ys) =
   EvDense $
@@ -183,6 +221,12 @@ interleave f (EvDense xs) (EvSparse ys) =
                   _ ->
                     Nothing' ::: rest
       )
+
+{-# ANN interleaveAll AllowRecursion #-}
+interleaveAll :: Box (a -> a -> a) -> List (Ev a) -> Ev a
+interleaveAll _ Nil = error "interleaveAll: List must be nonempty"
+interleaveAll _ [s] = s
+interleaveAll f (x :! xs) = interleave f x (interleaveAll f xs)
 
 scan :: (Stable b) => Box (b -> a -> b) -> b -> Ev a -> Ev b
 scan f acc (EvDense ev) =
@@ -269,3 +313,10 @@ switchR (Beh sig) e = Beh $ run sig e
               )
        in x ::: rest
 
+buffer :: Stable a => a -> Ev a -> Ev a
+buffer x (EvDense ys) = EvDense (delay (let (y:::ys') = adv ys in (x ::: let (EvDense rest) = buffer y (EvDense ys') in rest)))
+buffer x (EvSparse ys) = EvDense (delay (let (y:::ys') = adv ys in
+  case y of
+    Just' y' -> x ::: let (EvDense rest) = buffer y' (EvSparse ys') in rest
+    Nothing' -> x ::: let (EvDense rest) = buffer x (EvSparse ys') in rest
+  ))
