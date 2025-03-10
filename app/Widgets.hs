@@ -218,6 +218,11 @@ setInputBehTF :: TextField' -> Beh Text -> TextField'
 setInputBehTF tf b =
   tf{tfContent = b}
 
+sliderOnChange :: Slider' -> Ev Int
+sliderOnChange s =
+  let ch = sldEvent s
+  in mkEv (box (wait ch))
+
 mkConstText :: String -> Beh Text
 mkConstText s = constK (pack s)
 
