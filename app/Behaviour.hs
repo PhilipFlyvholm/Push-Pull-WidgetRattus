@@ -48,7 +48,7 @@ discretize (Beh (Fun f ::: xs)) = do
 
   let rest =
         if b
-          then never
+          then delayC $ delay (let sig = adv xs in discretize (Beh sig))
           else
             delayC $
               delay
