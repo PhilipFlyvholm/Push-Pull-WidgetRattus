@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# HLINT ignore "Use const" #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use const" #-}
 
 module Main where
 
@@ -30,46 +30,47 @@ timeFromDiff dt = addTime dt zeroTime
 timeFromLastTimer :: NominalDiffTime -> Int -> Beh (NominalDiffTime :* Int)
 timeFromLastTimer timeAtResetEvent max = const (Fun (box (\t -> (diffTime t (timeFromDiff timeAtResetEvent) :* max) :* False)))
 
-createStop :: NominalDiffTime -> (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int))
-createStop timeAtResetEvent (_ :* max) = stopWith (box (\(currentTime :* max') -> if nominalToInt currentTime >= max' then Just' (intToNominal max' :* max') else Nothing')) (timeFromLastTimer timeAtResetEvent max)
+stopTimerPredicate :: Beh (NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)
+stopTimerPredicate = stopWith (box (\(currentTime :* max') -> if nominalToInt currentTime >= max' then Just' (intToNominal max' :* max') else Nothing'))
 
-createStopMax :: Int -> NominalDiffTime -> (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int))
-createStopMax max timeAtResetEvent (v :* _) =
-  stopWith
-    ( box
-        ( \(currentTime :* max') ->
-            if nominalToInt currentTime >= max'
-              then Just' (intToNominal max' :* max')
-              else Nothing'
-        )
-    )
-    (const (Fun (box (\t -> (diffTime t (timeFromDiff (timeAtResetEvent - v)) :* max) :* False))))
+setResetTimer :: NominalDiffTime -> (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int))
+setResetTimer timeAtResetEvent (_ :* max) = stopTimerPredicate (timeFromLastTimer timeAtResetEvent max)
+
+setMax :: Int -> NominalDiffTime -> (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int))
+setMax max timeAtResetEvent (v :* _) = stopTimerPredicate (timeFromLastTimer (timeAtResetEvent - v) max)
 
 timerExample :: C VStack'
 timerExample = do
+  -- Initial value
+  let initialMax = 50
+  
+  -- time
   let startElapsedTime = timeBehaviour
-  let initalMax = 50
-  maxSlider <- mkSlider' initalMax (constK 1) (constK 100)
+  now <- time
+  let initialTimer = setResetTimer (diffTime now zeroTime) (0 :* initialMax)
+  
+  -- slider
+  maxSlider <- mkSlider' initialMax (constK 1) (constK 100)
   let maxBeh = sldCurr maxSlider
   let maxChangeEv = sliderOnChange maxSlider
-
-  resetBtn <- mkButton' $ mkConstText "Reset timer"
-
-  let resetEv :: Ev ((NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)) =
-        Event.triggerAwait (box (\_ timeAtResetEvent -> createStop timeAtResetEvent)) (btnOnClickEv resetBtn) (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
-
+  
   let maxEv :: Ev ((NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)) =
-        Event.triggerAwait (box createStopMax) maxChangeEv (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
+        Event.triggerAwait (box setMax) maxChangeEv (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
 
-  now <- time
-  let input = Event.interleave (box (\_ m -> m)) resetEv maxEv
-  let timer = switchR (createStop (diffTime now zeroTime) (0 :* initalMax)) input
+  -- reset
+  resetBtn <- mkButton' $ mkConstText "Reset timer"
+  let resetEv :: Ev ((NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)) =
+        Event.triggerAwait (box (\_ -> setResetTimer)) (btnOnClickEv resetBtn) (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
 
-  maxText' <- mkLabel' (Behaviour.map (box (\max -> "Raw-Max: " <> toText max)) maxBeh)
+  -- combine reset and max events
+  let combinedInput = Event.interleave (box (\_ m -> m)) resetEv maxEv
+  let timer = switchR initialTimer combinedInput
+
+  -- UI
   maxText <- mkLabel' (Behaviour.map (box (\(_ :* max) -> "Max: " <> toText max)) timer)
   text <- mkLabel' (Behaviour.map (box (\(t :* _) -> "Current: " <> toText (nominalToInt t))) timer)
   pb <- mkProgressBar' (constK 0) maxBeh (Behaviour.map (box (\(curr :* _) -> nominalToInt curr)) timer)
-  mkConstVStack' $ maxText' :* maxText :* maxSlider :* text :* resetBtn :* pb
+  mkConstVStack' $ maxSlider :* maxText :* text :* resetBtn :* pb
 
 main :: IO ()
 main = runApplication' timerExample
