@@ -19,15 +19,16 @@ nums = [0 .. 9]
 data Op = Plus | Minus | Equals | Reset
 
 compute :: (Int :* Op :* Bool -> Maybe' (Int :* Op) -> Int :* Op :* Bool)
-compute (n :* op     :* _) Nothing'          = (n :* op :* False)
-compute _                  (Just' (_ :* Reset)) = (0 :* Reset :* True)
-compute (n :* Plus   :* _) (Just' (m :* op)) = (n + m) :* op :* True
-compute (n :* Minus  :* _) (Just' (m :* op)) = (n - m) :* op :* True
-compute (_ :* Equals :* _) (Just' (m :* op)) = m :* op :* True
-compute (_ :* Reset  :* _) (Just' (m :* op)) = m :* op :* True
+compute (n :* op     :* _)  Nothing'            = n :* op :* False
+compute  _                 (Just' (_ :* Reset)) = 0 :* Reset :* True
+compute (n :* Plus   :* _) (Just' (m :* op))    = (n + m) :* op :* True
+compute (n :* Minus  :* _) (Just' (m :* op))    = (n - m) :* op :* True
+compute (_ :* Equals :* _) (Just' (m :* op))    = m :* op :* True
+compute (_ :* Reset  :* _) (Just' (m :* op))    = m :* op :* True
 
 calculatorExample :: C VStack'
 calculatorExample = do
+  -- Buttons
   numBtns :: List Button' <-
     mapM (mkButton' . constK) nums
 
@@ -40,49 +41,47 @@ calculatorExample = do
   -- Event to construct numbers
   let numClicks :: List (Ev (Int -> Int)) =
         zipWith' (\b n -> Event.map (box (\_ x -> x * 10 + n)) (btnOnClickEv b)) numBtns nums
-  -- signal to reset the current number to 0, after clicking an
-  -- operator button
-  let resetSig :: Ev (Int -> Int) =
+
+  -- Event to reset the current number to 0, after clicking an operator button
+  let resetEv :: Ev (Int -> Int) =
         Event.map (box (\_ _ -> 0)) $
           interleaveAll (box (\a _ -> a)) $
             map' btnOnClickEv [addBut, subBut, eqBut, resetBut]
 
-  -- combine signals to construct the number signal
-  let sigList = resetSig :! numClicks :: List (Ev (Int -> Int))
-  let combinedSig = interleaveAll (box (\a _ -> a)) sigList
+  -- Combine events to construct the number event
+  let evList = resetEv :! numClicks :: List (Ev (Int -> Int))
+  let combinedEvs = interleaveAll (box (\a _ -> a)) evList
 
-  -- number signal (i.e. the multidigit number that has been
-  -- constructed)
-  let numberSig :: Ev Int =
-        scan (box (\a f -> f a)) 0 combinedSig
+  -- Number event (i.e. the multidigit number that has been constructed)
+  let numberEv :: Ev Int =
+        scan (box (\a f -> f a)) 0 combinedEvs
 
-  -- operator signal
-  let opSig :: Ev Op =
+  -- Operator event
+  let opEv :: Ev Op =
           interleaveAll (box (\a _ -> a)) $
             map'
               (\(op :* btn) -> Event.map (box (\_ -> op)) (btnOnClickEv btn))
-              [(Plus :* addBut), (Minus :* subBut), (Equals :* eqBut), (Reset :* resetBut)]
+              [Plus :* addBut, Minus :* subBut, Equals :* eqBut, Reset :* resetBut]
 
-  -- signal consisting of an operand (i.e. a number) @n@ and an
-  -- operator @op@. @n@ is the value of @numberSig@ just before
-  -- clicking an operator button, and op is taken from opSig
+  -- Event consisting of an operand (i.e. a number) @n@ and an
+  -- operator @op@. @n@ is the value of @numberEv@ just before
+  -- clicking an operator button, and op is taken from opEv
   let operand :: Ev (Maybe' (Int :* Op)) =
-        triggerAwaitM (box (\op n -> Just' (n :* op))) opSig (stepper 0 (buffer 0 numberSig))
+        triggerAwaitM (box (\op n -> Just' (n :* op))) opEv (stepper 0 (buffer 0 numberEv))
 
-  -- The result signal consisting of a number n that is the result
+  -- The result event consisting of a number n that is the result
   -- of the current computation, an operator op that still needs to
   -- applied to n and a Boolean b that indicates whether we have
   -- just calculated n (and thus n should be displayed)
-  let resSig :: Ev (Int :* Op :* Bool) =
+  let resultEv :: Ev (Int :* Op :* Bool) =
         scan (box compute) (0 :* Plus :* True) operand
 
-  -- -- The signal that should be displayed
-  let displaySig :: Beh Int =
-        Behaviour.zipWith (box (\(n :* _ :* b) m -> if b then n else m)) (Event.stepper (0 :* Plus :* False) resSig) (Event.stepper 0 numberSig)
+  -- -- The behaviour that should be displayed
+  let displayBeh :: Beh Int =
+        Behaviour.zipWith (box (\(n :* _ :* b) m -> if b then n else m)) (Event.stepper (0 :* Plus :* False) resultEv) (Event.stepper 0 numberEv)
 
-  -- label to display the result (and operands)
-  result <- mkLabel' displaySig
-
+  -- UI
+  result <- mkLabel' displayBeh
   operators <- mkConstVStack' (resetBut :* addBut :* subBut :* eqBut)
   row1 <- mkConstHStack' (b7 :* b8 :* b9)
   row2 <- mkConstHStack' (b4 :* b5 :* b6)

@@ -60,14 +60,17 @@ bookingToText oneWay dep ret =
 
 flightBooker :: C VStack'
 flightBooker = do
+      -- Input UI
       flightTypeDropdown <- mkTextDropdown' (constK ["One-Way", "Return-Flight"]) "One-Way"
       departureDateField <- mkTextField' "01-01-2021"
       returnDateField <- mkTextField' "01-02-2021"
       bookButton <- mkButton' (mkConstText "Book")
       
+      -- Flight type checker
       let isReturnFlight = Behaviour.map (box (== "Return-Flight")) (tddCurr flightTypeDropdown)
       let isOneWayFlight = Behaviour.map (box (== "One-Way")) (tddCurr flightTypeDropdown)
       
+      -- Popup
       let bookingSummary = zipWith3 (box bookingToText) isOneWayFlight (tfContent departureDateField) (tfContent returnDateField)
 
       let triggerPopup = scan (box (\_ _ -> True)) False (btnOnClickEv bookButton)
@@ -76,6 +79,7 @@ flightBooker = do
       summaryLabel' <- mkOldWidget summaryLabel
       summaryPopup <- mkPopup' triggerPopup (constK summaryLabel')
 
+      -- Valid booking checker
       let departureDateFieldIsDate = Behaviour.map (box isDate) (tfContent departureDateField)
       let departureDateFieldIsLater = Behaviour.zipWith (box isLater) (tfContent departureDateField) (tfContent returnDateField)
 
@@ -83,6 +87,7 @@ flightBooker = do
       let returnFlightAndIsLater = Behaviour.zipWith (box (&&)) isReturnFlight departureDateFieldIsLater
       let validBooking = Behaviour.zipWith (box (||)) oneWayAndDate returnFlightAndIsLater
 
+      -- UI
       isReturnFlight' <- discretize isReturnFlight
       returnDateField' <- mkOldWidget returnDateField
       validBooking' <- discretize validBooking

@@ -41,15 +41,16 @@ setMax max timeAtResetEvent (v :* _) = stopTimerPredicate (timeFromLastTimer (ti
 
 timerExample :: C VStack'
 timerExample = do
+  
   -- Initial value
   let initialMax = 50
   
-  -- time
+  -- Time
   let startElapsedTime = timeBehaviour
   now <- time
   let initialTimer = setResetTimer (diffTime now zeroTime) (0 :* initialMax)
   
-  -- slider
+  -- Slider
   maxSlider <- mkSlider' initialMax (constK 1) (constK 100)
   let maxBeh = sldCurr maxSlider
   let maxChangeEv = sliderOnChange maxSlider
@@ -57,12 +58,12 @@ timerExample = do
   let maxEv :: Ev ((NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)) =
         Event.triggerAwait (box setMax) maxChangeEv (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
 
-  -- reset
+  -- Reset
   resetBtn <- mkButton' $ mkConstText "Reset timer"
   let resetEv :: Ev ((NominalDiffTime :* Int) -> Beh (NominalDiffTime :* Int)) =
         Event.triggerAwait (box (\_ -> setResetTimer)) (btnOnClickEv resetBtn) (Behaviour.map (box (`diffTime` zeroTime)) startElapsedTime)
 
-  -- combine reset and max events
+  -- Combine reset and max events
   let combinedInput = Event.interleave (box (\_ m -> m)) resetEv maxEv
   let timer = switchR initialTimer combinedInput
 

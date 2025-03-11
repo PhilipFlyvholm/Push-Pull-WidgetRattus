@@ -23,27 +23,31 @@ elapsedTime' =
 
 timerExample :: C VStack'
 timerExample = do
+  -- Time
   startElapsedTime <- elapsedTime
-
+  
+  -- Buttons
   startBtn <- mkButton' (mkConstText "Start")
   let startEv = btnOnClick startBtn
   stopBtn <- mkButton' (mkConstText "Stop")
   let stopEv = btnOnClick stopBtn
-
+  
+  -- Start and stop events
   let startTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
         mkEv' (box (delay (let _ = adv (unbox startEv) in elapsedTime')))
   let stopTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
         mkEv (box (delay (let _ = adv (unbox stopEv) in const . K)))
 
+  let combinedInput = Event.interleave (box (\x _ -> x)) startTime stopTime
+  let stopWatchSig = switchR (constK 0) combinedInput
+
+  -- UI
   timeLabName <- mkLabel' (mkConstText "Current Time:")
   swLabName <- mkLabel' (mkConstText "Elapsed Time:")
 
-  let input = Event.interleave (box (\x _ -> x)) startTime stopTime
-  let stopWatchSig :: Beh NominalDiffTime =
-        switchR (constK 0) input
-
   timeLab <- mkLabel' startElapsedTime
   stopWatchLab <- mkLabel' stopWatchSig
+  
   time <- mkConstHStack' (timeLabName :* timeLab)
   sw <- mkConstHStack' (swLabName :* stopWatchLab)
   buttons <- mkConstHStack' (startBtn :* stopBtn)
