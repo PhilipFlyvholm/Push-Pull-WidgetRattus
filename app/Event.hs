@@ -1,6 +1,6 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# LANGUAGE OverloadedLists #-}
 
 module Event where
 
@@ -8,14 +8,14 @@ import Behaviour
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (buffer, interleaveAll, interleave, scan, switchR)
+import WidgetRattus.Signal hiding (buffer, interleave, interleaveAll, scan, switchR, switchS)
 import Prelude hiding (filter)
 
 data Ev a
   = EvDense !(O (Sig a))
   | EvSparse !(O (Sig (Maybe' a)))
 
-unwrapEv :: Ev a -> O(Sig a)
+unwrapEv :: Ev a -> O (Sig a)
 unwrapEv (EvDense e) = e
 
 mkEv :: Box (O a) -> Ev a
@@ -115,42 +115,40 @@ triggerAwait f event behaviour = EvSparse (trig f event behaviour)
                 )
           )
 
-triggerAwaitM :: Stable b => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
-triggerAwaitM f event behaviour = EvDense (trig f event behaviour) where
-  trig :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
-  trig f' (EvDense as) (Beh (b ::: bs)) =
-    delayC $
-      delay (
-        let d = select as bs
-        in (
-          do 
-            t <- time
-            return (
-              case d of
-                Fst (a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvDense as') (Beh (b ::: bs'))
-                Snd as' bs' -> Nothing' ::: trig f' (EvDense as') (Beh bs')
-                Both (a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvDense as') (Beh (b' ::: bs'))
-             )
+triggerAwaitM :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
+triggerAwaitM f event behaviour = EvDense (trig f event behaviour)
+  where
+    trig :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
+    trig f' (EvDense as) (Beh (b ::: bs)) =
+      delayC $
+        delay
+          ( let d = select as bs
+             in ( do
+                    t <- time
+                    return
+                      ( case d of
+                          Fst (a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvDense as') (Beh (b ::: bs'))
+                          Snd as' bs' -> Nothing' ::: trig f' (EvDense as') (Beh bs')
+                          Both (a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvDense as') (Beh (b' ::: bs'))
+                      )
+                )
           )
-        )   
-  trig f' (EvSparse as) (Beh (b ::: bs)) =
-    delayC $
-      delay (
-        let d = select as bs
-        in (
-          do 
-            t <- time
-            return (
-              case d of
-                Fst (Just' a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvSparse as') (Beh (b ::: bs'))
-                Fst (Nothing' ::: as') bs' -> Nothing' ::: trig f' (EvSparse as') (Beh (b ::: bs'))
-                Snd as' bs' -> Nothing' ::: trig f' (EvSparse as') (Beh bs')
-                Both (Just' a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
-                Both (Nothing' ::: as') (b' ::: bs') -> Nothing' ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
-
-             )
+    trig f' (EvSparse as) (Beh (b ::: bs)) =
+      delayC $
+        delay
+          ( let d = select as bs
+             in ( do
+                    t <- time
+                    return
+                      ( case d of
+                          Fst (Just' a' ::: as') bs' -> unbox f' a' (apply b t) ::: trig f' (EvSparse as') (Beh (b ::: bs'))
+                          Fst (Nothing' ::: as') bs' -> Nothing' ::: trig f' (EvSparse as') (Beh (b ::: bs'))
+                          Snd as' bs' -> Nothing' ::: trig f' (EvSparse as') (Beh bs')
+                          Both (Just' a' ::: as') (b' ::: bs') -> unbox f' a' (apply b' t) ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
+                          Both (Nothing' ::: as') (b' ::: bs') -> Nothing' ::: trig f' (EvSparse as') (Beh (b' ::: bs'))
+                      )
+                )
           )
-        )   
 
 interleave :: Box (a -> a -> a) -> Ev a -> Ev a -> Ev a
 interleave f (EvDense xs) (EvDense ys) =
@@ -274,49 +272,66 @@ filterMap f (EvSparse ev) =
 filter :: Box (a -> Bool) -> Ev a -> Ev a
 filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))
 
-switchR :: (Stable a) => Beh a -> Ev (a -> Beh a) -> Beh a
-switchR (Beh sig) e = Beh $ run sig e
-  where
-    run :: (Stable a) => Sig (Fun Time a) -> Ev (a -> Beh a) -> Sig (Fun Time a)
-    run (x ::: xs) (EvDense ev) =
-      let rest =
-            delayC
-              ( delay
-                  ( let ticker = select xs ev
-                    in do
+switchS :: (Stable a) => Beh a -> O (a -> Beh a) -> Beh a
+switchS (Beh (x ::: xs)) d =
+  let rest =
+        delayC
+          ( delay
+              ( let ticker = select xs d
+                 in do
                       t <- time
                       return
                         ( case ticker of
-                            Fst xs' ev' -> run xs' (EvDense ev')
-                            Snd _ (f ::: ys) -> run (unwrap $ f (apply x t)) (EvDense ys)
-                            Both _ (f ::: ys) -> run (unwrap $ f (apply x t)) (EvDense ys)
+                            Fst xs' d' -> unwrap $ switchS (Beh xs') d'
+                            Snd _ f -> unwrap $ f (apply x t)
+                            Both _ f -> unwrap $ f (apply x t)
                         )
-                  )
               )
-       in x ::: rest
-    run (x ::: xs) (EvSparse ev) =
-       let rest =
-            delayC
-              ( delay
-                  ( let ticker = select xs ev
-                    in do
-                      t <- time
-                      return
-                        ( case ticker of
-                            Fst xs' ev' -> run xs' (EvSparse ev')
-                            Snd _ (Just' f ::: ys) -> run (unwrap $ f (apply x t)) (EvSparse ys)
-                            Snd xs' (Nothing' ::: ys) -> run (x ::: xs') (EvSparse ys)
-                            Both _ (Just' f ::: ys) -> run (unwrap $ f (apply x t)) (EvSparse ys)
-                            Both xs' (Nothing' ::: ys) -> run xs' (EvSparse ys)
-                        )
-                  )
-              )
-       in x ::: rest
+          )
+   in Beh (x ::: rest)
 
-buffer :: Stable a => a -> Ev a -> Ev a
-buffer x (EvDense ys) = EvDense (delay (let (y:::ys') = adv ys in (x ::: let (EvDense rest) = buffer y (EvDense ys') in rest)))
-buffer x (EvSparse ys) = EvDense (delay (let (y:::ys') = adv ys in
-  case y of
-    Just' y' -> x ::: let (EvDense rest) = buffer y' (EvSparse ys') in rest
-    Nothing' -> x ::: let (EvDense rest) = buffer x (EvSparse ys') in rest
-  ))
+switchSM :: (Stable a) => Beh a -> O (Maybe' (a -> Beh a)) -> Beh a
+switchSM (Beh (x ::: xs)) d =
+  let rest =
+        delayC
+          ( delay
+              ( let ticker = select xs d
+                 in do
+                      t <- time
+                      return
+                        ( case ticker of
+                            Fst xs' d' -> unwrap $ switchSM (Beh xs') d'
+                            Snd _ (Just' f) -> unwrap $ f (apply x t)
+                            Snd xs' Nothing' -> x ::: xs'
+                            Both _ (Just' f) -> unwrap $ f (apply x t)
+                            Both xs' Nothing' -> xs'
+                        )
+              )
+          )
+   in Beh (x ::: rest)
+
+switchR :: (Stable a) => Beh a -> Ev (a -> Beh a) -> Beh a
+switchR beh (EvDense steps) =
+  switchS beh (delay (let step ::: steps' = adv steps in (\x -> switchR (step x) (EvDense steps'))))
+switchR beh (EvSparse steps) =
+  switchSM
+    beh
+    ( delay
+        ( let step ::: steps' = adv steps
+           in case step of
+                Just' a -> Just' (\x -> switchR (a x) (EvSparse steps'))
+                Nothing' -> Nothing'
+        )
+    )
+
+buffer :: (Stable a) => a -> Ev a -> Ev a
+buffer x (EvDense ys) = EvDense (delay (let (y ::: ys') = adv ys in (x ::: let (EvDense rest) = buffer y (EvDense ys') in rest)))
+buffer x (EvSparse ys) =
+  EvDense
+    ( delay
+        ( let (y ::: ys') = adv ys
+           in case y of
+                Just' y' -> x ::: let (EvDense rest) = buffer y' (EvSparse ys') in rest
+                Nothing' -> x ::: let (EvDense rest) = buffer x (EvSparse ys') in rest
+        )
+    )
