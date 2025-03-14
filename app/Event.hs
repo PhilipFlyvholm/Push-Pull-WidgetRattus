@@ -290,6 +290,27 @@ switchS (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
+switchS' :: (Stable a) => Beh a -> O (a -> C (Beh a)) -> Beh a
+switchS' (Beh (x ::: xs)) d =
+  let rest =
+        delayC
+          ( delay
+              ( let ticker = select xs d
+                 in do
+                      t <- time
+                      let result =
+                            ( case ticker of
+                                Fst xs' d' -> do
+                                  return $ switchS' (Beh xs') d'
+                                Snd _ f -> f (apply x t)
+                                Both _ f ->  f (apply x t)
+                            )
+                      unwrap <$> result
+              )
+          )
+   in Beh (x ::: rest)
+
+
 switchSM :: (Stable a) => Beh a -> O (Maybe' (a -> Beh a)) -> Beh a
 switchSM (Beh (x ::: xs)) d =
   let rest =
@@ -310,6 +331,28 @@ switchSM (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
+switchSM' :: (Stable a) => Beh a -> O (Maybe' (a -> C (Beh a))) -> Beh a
+switchSM' (Beh (x ::: xs)) d =
+  let rest =
+        delayC
+          ( delay
+              ( let ticker = select xs d
+                 in do
+                      t <- time
+                      let result =
+                            ( case ticker of
+                                Fst xs' d' -> do return $ switchSM' (Beh xs') d'
+                                Snd _ (Just' f) -> f (apply x t)
+                                Snd xs' Nothing' -> do return $ Beh (x ::: xs')
+                                Both _ (Just' f) -> f (apply x t)
+                                Both xs' Nothing' -> do return $ Beh xs'
+                            )
+
+                      unwrap <$> result
+              )
+          )
+   in Beh (x ::: rest)
+
 switchR :: (Stable a) => Beh a -> Ev (a -> Beh a) -> Beh a
 switchR beh (EvDense steps) =
   switchS beh (delay (let step ::: steps' = adv steps in (\x -> switchR (step x) (EvDense steps'))))
@@ -323,6 +366,30 @@ switchR beh (EvSparse steps) =
                 Nothing' -> Nothing'
         )
     )
+
+switchR' :: (Stable a) => Beh a -> Ev (a -> C (Beh a)) -> Beh a
+switchR' beh (EvDense steps) =
+  switchS' beh (delay (
+      let step ::: steps' = adv steps
+      in (\x -> do
+                x' <- step x
+                return $ switchR' x' (EvDense steps'))
+        )
+      )
+switchR' beh (EvSparse steps) =
+  switchSM'
+    beh
+    ( delay
+        ( let step ::: steps' = adv steps
+           in case step of
+                Just' a -> 
+                  Just' (\x -> do
+                                x' <- a x
+                                return $ switchR' x' (EvSparse steps'))
+                Nothing' -> Nothing'
+        )
+    )
+
 
 buffer :: (Stable a) => a -> Ev a -> Ev a
 buffer x (EvDense ys) = EvDense (delay (let (y ::: ys') = adv ys in (x ::: let (EvDense rest) = buffer y (EvDense ys') in rest)))
