@@ -15,8 +15,9 @@ module Behaviour where
 import Primitives
 import WidgetRattus
 import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockUnion, inputInClock)
-import WidgetRattus.Signal hiding (const, jump, switch)
+import WidgetRattus.Signal hiding (const, integral, jump, switch)
 import Prelude hiding (const, map, zipWith)
+import Data.Ratio
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
@@ -166,6 +167,32 @@ stopWith p (Beh b) = Beh (run b)
             )
         )
         ::: delay (run (adv xs))
+
+dt :: Int
+dt = 20000
+
+dtf :: Float
+dtf = fromRational (fromIntegral dt % 1000000)
+
+integral :: Float -> Beh Float -> C (Beh Float)
+-- integral cur (Beh(0 ::: xs)) =
+--   cur ::: delay (integral cur (adv xs))
+integral cur (Beh (x ::: xs)) = do
+  let rest =
+        delayC $ delay
+          ( let d = select xs (timer dt)
+            in do
+                t <- time
+                let result =
+                      ( case d of
+                          Fst xs' _ ->              integral cur (Beh xs')
+                          Snd xs' _ ->               integral (cur + apply x t * dtf) (Beh (x ::: xs'))
+                          Both (x' ::: xs') _ ->   integral (cur + apply x' t * dtf) (Beh (x' ::: xs'))
+                      )
+                unwrap <$> result
+          )
+
+  return $ Beh (K cur ::: rest)
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
