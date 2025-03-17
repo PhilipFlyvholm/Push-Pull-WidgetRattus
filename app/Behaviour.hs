@@ -12,12 +12,12 @@
 
 module Behaviour where
 
+import Data.Ratio
 import Primitives
 import WidgetRattus
 import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockUnion, inputInClock)
 import WidgetRattus.Signal hiding (const, integral, jump, switch)
 import Prelude hiding (const, map, zipWith)
-import Data.Ratio
 
 newtype Beh a = Beh (Sig (Fun Time a))
 
@@ -175,24 +175,82 @@ dtf :: Float
 dtf = fromRational (fromIntegral dt % 1000000)
 
 integral :: Float -> Beh Float -> C (Beh Float)
--- integral cur (Beh(0 ::: xs)) =
---   cur ::: delay (integral cur (adv xs))
+integral cur (Beh (K x ::: xs)) = do
+  t <- time
+  let rest =
+        delayC $
+          delay
+            ( do
+                t' <- time
+                let tDiff = diffTime t' t
+                let r = cur + x * fromRational (toRational tDiff)
+                let result = integral r (Beh (adv xs))
+                unwrap <$> result
+            )
+  let curF =
+        Fun
+          ( box
+              ( \t' ->
+                  let tDiff = diffTime t' t
+                   in cur + x * fromRational (toRational tDiff) :* False
+              )
+          )
+  return $ Beh (curF ::: rest)
 integral cur (Beh (x ::: xs)) = do
   let rest =
-        delayC $ delay
-          ( let d = select xs (timer dt)
-            in do
-                t <- time
-                let result =
-                      ( case d of
-                          Fst xs' _ ->              integral cur (Beh xs')
-                          Snd xs' _ ->               integral (cur + apply x t * dtf) (Beh (x ::: xs'))
-                          Both (x' ::: xs') _ ->   integral (cur + apply x' t * dtf) (Beh (x' ::: xs'))
-                      )
-                unwrap <$> result
-          )
+        delayC $
+          delay
+            ( let d = select xs (timer dt)
+               in do
+                    t <- time
+                    let result =
+                          ( case d of
+                              Fst xs' _ -> integral cur (Beh xs')
+                              Snd xs' _ -> integral (cur + apply x t * dtf) (Beh (x ::: xs'))
+                              Both (x' ::: xs') _ -> integral (cur + apply x' t * dtf) (Beh (x' ::: xs'))
+                          )
+                    unwrap <$> result
+            )
 
   return $ Beh (K cur ::: rest)
+
+derivative :: Beh Float -> C (Beh Float)
+derivative (Beh (x ::: xs)) = do
+  t <- time
+  Beh <$> der 0 (apply x t) (x ::: xs)
+  where
+    der :: Float -> Float -> Sig (Fun Time Float) -> C (Sig (Fun Time Float))
+    der 0 _ (x ::: xs) =
+      do
+        t <- time
+        return
+          ( K 0
+              ::: delayC
+                ( delay
+                    ( let x' ::: xs' = adv xs
+                       in do
+                            t' <- time
+                            der ((apply x' t' - apply x t) / dtf) (apply x t) (x' ::: xs')
+                    )
+                )
+          )
+    der d last (x ::: xs) =
+      do
+        t <- time
+        return
+          ( K d
+              ::: delayC
+                ( delay
+                    ( let ticker = select xs (timer dt)
+                       in do
+                            t' <- time
+                            case ticker of
+                              Fst xs' _ -> der d last xs'
+                              Snd xs' _ -> der ((apply x t - last) / dtf) (apply x t) (x ::: xs')
+                              Both (x' ::: xs') _ -> der ((apply x' t' - last) / dtf) (apply x' t') (x' ::: xs')
+                    )
+                )
+          )
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
