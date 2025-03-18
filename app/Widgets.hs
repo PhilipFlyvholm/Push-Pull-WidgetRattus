@@ -22,8 +22,25 @@ import Data.Text
 import WidgetRattus.Signal (Sig ((:::)), map)
 import Prelude hiding (max)
 
+
+
 class (Continuous a) => IsWidget' a where
   mkOldWidget :: a -> C Widget
+
+  setEnabled :: a -> Beh Bool -> Widget'
+  setEnabled = Widget'
+
+
+data Widget' where
+  Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
+
+
+continuous ''Widget'
+instance IsWidget' Widget' where
+  mkOldWidget (Widget' w beh) = do
+    beh' <- discretize beh
+    w' <- mkOldWidget w
+    return (WR.Widget w' beh')
 
 class Widgets' ws where
       toWidgetList' :: ws -> C (List Widget)
@@ -232,14 +249,3 @@ runApplication' w =
         w' <- w
         mkOldWidget w'
     )
-
-data Widget' where
-  Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
-
-
-continuous ''Widget'
-instance IsWidget' Widget' where
-  mkOldWidget (Widget' w beh) = do
-    beh' <- discretize beh
-    w' <- mkOldWidget w
-    return (WR.Widget w' beh')

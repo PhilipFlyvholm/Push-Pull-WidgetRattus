@@ -11,7 +11,7 @@ import Event
 import Data.Text (Text)
 import Prelude hiding (zipWith3, const, map)
 
-import WidgetRattus.Widgets (setEnabled)
+import WidgetRattus.Widgets ()
 
 isDate :: Text -> Bool
 isDate txt = case splitOn' "-" txt of
@@ -88,12 +88,7 @@ flightBooker = do
       let validBooking = Behaviour.zipWith (box (||)) oneWayAndDate returnFlightAndIsLater
 
       -- UI
-      isReturnFlight' <- discretize isReturnFlight
-      returnDateField' <- mkOldWidget returnDateField
-      validBooking' <- discretize validBooking
-      bookButton' <- mkOldWidget bookButton
-      
-      mkConstVStack' (summaryPopup :* flightTypeDropdown :* departureDateField :* setEnabled returnDateField' isReturnFlight' :* setEnabled bookButton' validBooking')
+      mkConstVStack' (summaryPopup :* flightTypeDropdown :* departureDateField :* setEnabled returnDateField isReturnFlight :* setEnabled bookButton validBooking)
 
 main :: IO ()
 main = runApplication' flightBooker
