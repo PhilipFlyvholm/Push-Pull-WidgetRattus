@@ -16,7 +16,7 @@ import Data.Ratio
 import Primitives
 import WidgetRattus
 import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockUnion, inputInClock)
-import WidgetRattus.Signal hiding (const, integral, jump, switch)
+import WidgetRattus.Signal hiding (map, const, integral, jump, switch)
 import Prelude hiding (const, map, zipWith)
 
 newtype Beh a = Beh (Sig (Fun Time a))
@@ -276,7 +276,7 @@ intergral' cur (Beh (x ::: xs)) = do
               )
           )
   return $ Beh (curF ::: rest)
-  
+
 derivative' :: Beh Float -> C (Beh Float)
 derivative' (Beh (x ::: xs)) = do
   t <- time
@@ -313,3 +313,28 @@ instance (Continuous a) => Continuous (Beh a) where
       then let n = adv' xs inp in (Beh n, nextProgress n)
       else let (n, cl') = progressAndNext inp x in (Beh (n ::: xs), cl `clockUnion` cl')
   nextProgress (Beh (x ::: (Delay cl _))) = nextProgress x `clockUnion` cl
+
+
+-- Prevent functions from being inlined too early for the rewrite
+-- rules to fire.
+
+{-# NOINLINE [1] map #-}
+{-# NOINLINE [1] const #-}
+{-# NOINLINE [1] constK #-}
+{-# NOINLINE [1] switch #-}
+
+{-# RULES
+
+  "beh.map/beh.map" forall f g xs.
+    map f (map g xs) = map (box (unbox f . unbox g)) xs ;
+  
+  "beh.constK/beh.map" forall (f :: Stable b => Box (a -> b))  x.
+    map f (constK x) = let x' = unbox f x in constK x' ;
+
+  "beh.const/beh.switch" forall x xs.
+  switch (const x) xs = Beh (x ::: delay (unwrap (adv xs)));
+
+  "beh.constK/beh.switch" forall x xs.
+  switch (constK x) xs = Beh (K x ::: delay (unwrap (adv xs)));
+
+#-}

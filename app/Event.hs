@@ -4,12 +4,12 @@
 
 module Event where
 
-import Behaviour
+import Behaviour hiding (map)
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (buffer, interleave, interleaveAll, scan, switchR, switchS)
-import Prelude hiding (filter)
+import WidgetRattus.Signal hiding (map, buffer, interleave, interleaveAll, scan, switchR, switchS)
+import Prelude hiding (map, filter)
 
 data Ev a
   = EvDense !(O (Sig a))
@@ -382,7 +382,7 @@ switchR' beh (EvSparse steps) =
     ( delay
         ( let step ::: steps' = adv steps
            in case step of
-                Just' a -> 
+                Just' a ->
                   Just' (\x -> do
                                 x' <- a x
                                 return $ switchR' x' (EvSparse steps'))
@@ -402,3 +402,26 @@ buffer x (EvSparse ys) =
                 Nothing' -> x ::: let (EvDense rest) = buffer x (EvSparse ys') in rest
         )
     )
+
+
+
+-- Prevent functions from being inlined too early for the rewrite
+-- rules to fire.
+
+{-# NOINLINE [1] map #-}
+{-# NOINLINE [1] filter #-}
+
+{-# RULES
+
+  "ev.map/ev.map" forall f g xs.
+    map f (map g xs) = map (box (unbox f . unbox g)) xs ;
+
+  "ev.map/ev.filter" forall f g xs.
+    map f (filter g xs) = filterMap (box (\x -> if unbox g x then Just' (unbox f x) else Nothing')) xs ;
+
+  "ev.filter/ev.map" forall f g xs.
+    filter f (map g xs) = filterMap (box (\x -> if (unbox f . unbox g) x then Just' x else Nothing')) xs ;
+
+  "ev.filter/ev.filter" forall f g xs.
+    filter f (filter g xs) = filterMap (box (\x -> if unbox f x && unbox g x then Just' x else Nothing')) xs ;
+#-}
