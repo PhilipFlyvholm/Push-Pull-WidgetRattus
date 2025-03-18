@@ -214,29 +214,6 @@ integral cur (Beh (x ::: xs)) = do
 
   return $ Beh (K cur ::: rest)
 
-intergral' :: Float -> Beh Float -> C (Beh Float)
-intergral' cur (Beh (x ::: xs)) = do
-  t <- time
-  let rest = 
-        delayC (
-          delay (
-            do
-              t' <- time
-              let tDiff = diffTime t' t
-              let dt = fromRational (toRational tDiff)
-              unwrap <$> intergral' (cur + apply x t' * dt) (Beh (adv xs))
-            )
-          )
-  let curF =
-        Fun
-          ( box
-              ( \t' ->
-                  let tDiff = diffTime t' t
-                      dt = fromRational (toRational tDiff)
-                   in cur + apply x t' * dt :* False
-              )
-          )
-  return $ Beh (curF ::: rest)
 
 derivative :: Beh Float -> C (Beh Float)
 derivative (Beh (x ::: xs)) = do
@@ -275,6 +252,56 @@ derivative (Beh (x ::: xs)) = do
                     )
                 )
           )
+
+intergral' :: Float -> Beh Float -> C (Beh Float)
+intergral' cur (Beh (x ::: xs)) = do
+  t <- time
+  let rest =
+        delayC
+          ( delay
+              ( do
+                  t' <- time
+                  let tDiff = diffTime t' t
+                  let dt = fromRational (toRational tDiff)
+                  unwrap <$> intergral' (cur + apply x t' * dt) (Beh (adv xs))
+              )
+          )
+  let curF =
+        Fun
+          ( box
+              ( \t' ->
+                  let tDiff = diffTime t' t
+                      dt = fromRational (toRational tDiff)
+                   in cur + apply x t' * dt :* False
+              )
+          )
+  return $ Beh (curF ::: rest)
+  
+derivative' :: Beh Float -> C (Beh Float)
+derivative' (Beh (x ::: xs)) = do
+  t <- time
+  Beh <$> der (apply x t) (x ::: xs)
+  where
+    der :: Float -> Sig (Fun Time Float) -> C (Sig (Fun Time Float))
+    der last (x ::: xs) = do
+      t <- time
+      let curF =
+            Fun $
+              box
+                ( \t' ->
+                    let tDiff = diffTime t' t
+                        dt = fromRational (toRational tDiff)
+                     in (apply x t - last) / dt :* False
+                )
+      let rest =
+            delayC
+              ( delay
+                  ( do
+                      t' <- time
+                      der (apply x t') (adv xs)
+                  )
+              )
+      return (curF ::: rest)
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
