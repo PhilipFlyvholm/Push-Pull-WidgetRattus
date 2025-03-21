@@ -67,7 +67,7 @@ calculatorExample = do
   -- operator @op@. @n@ is the value of @numberEv@ just before
   -- clicking an operator button, and op is taken from opEv
   let operand :: Ev (Maybe' (Int :* Op)) =
-        triggerAwaitM (box (\op n -> Just' (n :* op))) opEv (stepper 0 (buffer 0 numberEv))
+        triggerM (box (\op n -> Just' (n :* op))) opEv (stepper 0 (buffer 0 numberEv))
 
   -- The result event consisting of a number n that is the result
   -- of the current computation, an operator op that still needs to

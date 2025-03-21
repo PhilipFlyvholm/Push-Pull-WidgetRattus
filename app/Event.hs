@@ -60,22 +60,22 @@ map f (EvSparse sig) =
 
 stepper :: (Stable a) => a -> Ev a -> Beh a
 stepper initial event =
-  Beh (K initial ::: delay (unwrap (adv (stepperAwait initial event))))
+  Beh (K initial ::: delay (unwrap (adv (aux initial event))))
+  where 
+    aux :: (Stable a) => a -> Ev a -> O (Beh a)
+    aux _ (EvDense ev) =
+      delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (unwrap (adv (aux x (EvDense xs))))))
+    aux initial (EvSparse ev) =
+      delay
+        ( let (x ::: xs) = adv ev
+          in case x of
+                Just' x' ->
+                  Beh (K x' ::: delay (unwrap (adv (aux x' (EvSparse xs)))))
+                Nothing' -> Beh (K initial ::: delay (unwrap (adv (aux initial (EvSparse xs)))))
+        )
 
-stepperAwait :: (Stable a) => a -> Ev a -> O (Beh a)
-stepperAwait _ (EvDense ev) =
-  delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (unwrap (adv (stepperAwait x (EvDense xs))))))
-stepperAwait initial (EvSparse ev) =
-  delay
-    ( let (x ::: xs) = adv ev
-       in case x of
-            Just' x' ->
-              Beh (K x' ::: delay (unwrap (adv (stepperAwait x' (EvSparse xs)))))
-            Nothing' -> Beh (K initial ::: delay (unwrap (adv (stepperAwait initial (EvSparse xs)))))
-    )
-
-triggerAwait :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev c
-triggerAwait f event behaviour = EvSparse (trig f event behaviour)
+trigger :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev c
+trigger f event behaviour = EvSparse (trig f event behaviour)
   where
     trig :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
     trig f' (EvSparse as) (Beh (b ::: bs)) =
@@ -115,8 +115,8 @@ triggerAwait f event behaviour = EvSparse (trig f event behaviour)
                 )
           )
 
-triggerAwaitM :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
-triggerAwaitM f event behaviour = EvDense (trig f event behaviour)
+triggerM :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
+triggerM f event behaviour = EvDense (trig f event behaviour)
   where
     trig :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
     trig f' (EvDense as) (Beh (b ::: bs)) =
