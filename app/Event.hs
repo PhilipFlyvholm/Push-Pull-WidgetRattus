@@ -452,7 +452,7 @@ buffer x (EvSparse ys) =
     filterMap (box (\x -> if unbox g x then Just' (unbox f x) else Nothing')) xs
 "ev.filter/ev.map" forall f g xs.
   filter f (map g xs) =
-    filterMap (box (\x -> if (unbox f . unbox g) x then Just' x else Nothing')) xs
+    filterMap (box (\x -> if (unbox f . unbox g) x then Just' $ unbox g x else Nothing')) xs
 "ev.filter/ev.filter" forall f g xs.
   filter f (filter g xs) =
     filterMap (box (\x -> if unbox f x && unbox g x then Just' x else Nothing')) xs

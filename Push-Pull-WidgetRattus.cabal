@@ -57,3 +57,7 @@ executable converter
 executable calculator
   import: shared-settings
   main-is: Examples/Calculator.hs
+
+executable rewrite
+  import: shared-settings
+  main-is: Examples/RewriteTests.hs
