@@ -6,6 +6,7 @@
 module Primitives where
 
 import WidgetRattus
+import WidgetRattus.InternalPrimitives
 
 data Fun t a = K !a | Fun !(Box (t -> (a :* Bool)))
 
@@ -22,3 +23,6 @@ mapF f (Fun f') = Fun (box (\t -> let (a :* b) = unbox f' t in (unbox f a :* b))
 mapFBool :: Box (a -> Bool) -> Fun t a -> Fun t a
 mapFBool _ (K a) = K a
 mapFBool g (Fun f') = Fun (box (\t -> let (a :* _) = unbox f' t in (a :* unbox g a)))
+
+delayCF :: O(a -> C b) -> O(a -> b)
+delayCF (Delay c f) = Delay c (\inp a -> advC' (f inp a) inp)

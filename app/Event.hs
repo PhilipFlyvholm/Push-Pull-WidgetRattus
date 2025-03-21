@@ -8,8 +8,8 @@ import Behaviour hiding (map)
 import Data.IntMap ()
 import Primitives (Fun (..), apply)
 import WidgetRattus
-import WidgetRattus.Signal hiding (map, buffer, interleave, interleaveAll, scan, switchR, switchS)
-import Prelude hiding (map, filter)
+import WidgetRattus.Signal hiding (buffer, interleave, interleaveAll, map, scan, switchR, switchS)
+import Prelude hiding (filter, map)
 
 data Ev a
   = EvDense !(O (Sig a))
@@ -58,17 +58,47 @@ map f (EvSparse sig) =
         )
     )
 
+removeC :: Ev (C a) -> Ev a
+removeC (EvDense sig) =
+  EvDense
+    ( delayC
+        ( delay
+            ( let x ::: xs = adv sig
+                  (EvDense rest) = removeC (EvDense xs)
+               in ( do
+                      x' <- x
+                      return (x' ::: rest)
+                  )
+            )
+        )
+    )
+
+-- delayCFMap :: Ev (a -> C b) -> Ev (a -> b)
+-- delayCFMap (EvDense sig) =
+--   EvDense (
+--     delay (
+--       let x ::: xs = adv sig
+--       in do
+--         return (\a -> x a)
+--     )
+--   )
+
+--  EvDense
+--     (
+--        let y = delay (let (x ::: xs) = adv sig in x)
+--         in mapO (box (\d -> d ::: (let (EvDense sig') = delayCFMap (EvDense sig) in sig'))) (delayCF y)
+--     )
 stepper :: (Stable a) => a -> Ev a -> Beh a
 stepper initial event =
   Beh (K initial ::: delay (unwrap (adv (aux initial event))))
-  where 
+  where
     aux :: (Stable a) => a -> Ev a -> O (Beh a)
     aux _ (EvDense ev) =
       delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (unwrap (adv (aux x (EvDense xs))))))
     aux initial (EvSparse ev) =
       delay
         ( let (x ::: xs) = adv ev
-          in case x of
+           in case x of
                 Just' x' ->
                   Beh (K x' ::: delay (unwrap (adv (aux x' (EvSparse xs)))))
                 Nothing' -> Beh (K initial ::: delay (unwrap (adv (aux initial (EvSparse xs)))))
@@ -303,13 +333,12 @@ switchS' (Beh (x ::: xs)) d =
                                 Fst xs' d' -> do
                                   return $ switchS' (Beh xs') d'
                                 Snd _ f -> f (apply x t)
-                                Both _ f ->  f (apply x t)
+                                Both _ f -> f (apply x t)
                             )
                       unwrap <$> result
               )
           )
    in Beh (x ::: rest)
-
 
 switchSM :: (Stable a) => Beh a -> O (Maybe' (a -> Beh a)) -> Beh a
 switchSM (Beh (x ::: xs)) d =
@@ -369,13 +398,16 @@ switchR beh (EvSparse steps) =
 
 switchR' :: (Stable a) => Beh a -> Ev (a -> C (Beh a)) -> Beh a
 switchR' beh (EvDense steps) =
-  switchS' beh (delay (
-      let step ::: steps' = adv steps
-      in (\x -> do
-                x' <- step x
-                return $ switchR' x' (EvDense steps'))
+  switchS'
+    beh
+    ( delay
+        ( let step ::: steps' = adv steps
+           in ( \x -> do
+                  x' <- step x
+                  return $ switchR' x' (EvDense steps')
+              )
         )
-      )
+    )
 switchR' beh (EvSparse steps) =
   switchSM'
     beh
@@ -383,13 +415,14 @@ switchR' beh (EvSparse steps) =
         ( let step ::: steps' = adv steps
            in case step of
                 Just' a ->
-                  Just' (\x -> do
-                                x' <- a x
-                                return $ switchR' x' (EvSparse steps'))
+                  Just'
+                    ( \x -> do
+                        x' <- a x
+                        return $ switchR' x' (EvSparse steps')
+                    )
                 Nothing' -> Nothing'
         )
     )
-
 
 buffer :: (Stable a) => a -> Ev a -> Ev a
 buffer x (EvDense ys) = EvDense (delay (let (y ::: ys') = adv ys in (x ::: let (EvDense rest) = buffer y (EvDense ys') in rest)))
@@ -403,25 +436,24 @@ buffer x (EvSparse ys) =
         )
     )
 
-
-
 -- Prevent functions from being inlined too early for the rewrite
 -- rules to fire.
 
 {-# NOINLINE [1] map #-}
+
 {-# NOINLINE [1] filter #-}
 
 {-# RULES
-
-  "ev.map/ev.map" forall f g xs.
-    map f (map g xs) = map (box (unbox f . unbox g)) xs ;
-
-  "ev.map/ev.filter" forall f g xs.
-    map f (filter g xs) = filterMap (box (\x -> if unbox g x then Just' (unbox f x) else Nothing')) xs ;
-
-  "ev.filter/ev.map" forall f g xs.
-    filter f (map g xs) = filterMap (box (\x -> if (unbox f . unbox g) x then Just' x else Nothing')) xs ;
-
-  "ev.filter/ev.filter" forall f g xs.
-    filter f (filter g xs) = filterMap (box (\x -> if unbox f x && unbox g x then Just' x else Nothing')) xs ;
-#-}
+"ev.map/ev.map" forall f g xs.
+  map f (map g xs) =
+    map (box (unbox f . unbox g)) xs
+"ev.map/ev.filter" forall f g xs.
+  map f (filter g xs) =
+    filterMap (box (\x -> if unbox g x then Just' (unbox f x) else Nothing')) xs
+"ev.filter/ev.map" forall f g xs.
+  filter f (map g xs) =
+    filterMap (box (\x -> if (unbox f . unbox g) x then Just' x else Nothing')) xs
+"ev.filter/ev.filter" forall f g xs.
+  filter f (filter g xs) =
+    filterMap (box (\x -> if unbox f x && unbox g x then Just' x else Nothing')) xs
+  #-}
