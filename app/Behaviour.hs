@@ -19,12 +19,12 @@ import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockU
 import WidgetRattus.Signal hiding (map, const, integral, jump, switch)
 import Prelude hiding (const, map, zipWith)
 
-newtype Beh a = Beh (Sig (Fun Time a))
+newtype Beh a = Beh (Sig (Fun a))
 
-unwrap :: Beh a -> Sig (Fun Time a)
+unwrap :: Beh a -> Sig (Fun a)
 unwrap (Beh a) = a
 
-const :: Fun Time a -> Beh a
+const :: Fun a -> Beh a
 const x = Beh (x ::: never)
 
 constK :: a -> Beh a
@@ -220,7 +220,7 @@ derivative (Beh (x ::: xs)) = do
   t <- time
   Beh <$> der 0 (apply x t) (x ::: xs)
   where
-    der :: Float -> Float -> Sig (Fun Time Float) -> C (Sig (Fun Time Float))
+    der :: Float -> Float -> Sig (Fun Float) -> C (Sig (Fun Float))
     der 0 _ (x ::: xs) =
       do
         t <- time
@@ -282,7 +282,7 @@ derivative' (Beh (x ::: xs)) = do
   t <- time
   Beh <$> der (apply x t) (x ::: xs)
   where
-    der :: Float -> Sig (Fun Time Float) -> C (Sig (Fun Time Float))
+    der :: Float -> Sig (Fun Float) -> C (Sig (Fun Float))
     der last (x ::: xs) = do
       t <- time
       let curF =
