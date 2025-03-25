@@ -15,11 +15,11 @@ import WidgetRattus.Signal (Sig ((:::)))
 import Widgets
 import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith)
 
-elapsedTime' :: C (NominalDiffTime -> Beh NominalDiffTime)
+elapsedTime' :: C (NominalDiffTime -> Beh () NominalDiffTime)
 elapsedTime' =
   do
     startTime <- time
-    return (\f -> Beh (Fun (box (\currentTime -> (f + diffTime currentTime startTime) :* False)) ::: never))
+    return (\f -> Beh (Fun () (box (\_ currentTime -> (f + diffTime currentTime startTime) :* False :* ())) ::: never))
 
 timerExample :: C VStack'
 timerExample = do
@@ -33,9 +33,9 @@ timerExample = do
   let stopEv = btnOnClick stopBtn
   
   -- Start and stop events
-  let startTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
+  let startTime :: Ev (NominalDiffTime -> Beh () NominalDiffTime) =
         mkEv' (box (delay (let _ = adv (unbox startEv) in elapsedTime')))
-  let stopTime :: Ev (NominalDiffTime -> Beh NominalDiffTime) =
+  let stopTime :: Ev (NominalDiffTime -> Beh () NominalDiffTime) =
         mkEv (box (delay (let _ = adv (unbox stopEv) in const . K)))
 
   let combinedInput = Event.interleave (box (\x _ -> x)) startTime stopTime

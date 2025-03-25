@@ -88,11 +88,12 @@ removeC (EvDense sig) =
 --        let y = delay (let (x ::: xs) = adv sig in x)
 --         in mapO (box (\d -> d ::: (let (EvDense sig') = delayCFMap (EvDense sig) in sig'))) (delayCF y)
 --     )
-stepper :: (Stable a) => a -> Ev a -> Beh a
+
+stepper :: (Stable a) => a -> Ev a -> Beh () a
 stepper initial event =
   Beh (K initial ::: delay (unwrap (adv (aux initial event))))
   where
-    aux :: (Stable a) => a -> Ev a -> O (Beh a)
+    aux :: (Stable a) => a -> Ev a -> O (Beh s a)
     aux _ (EvDense ev) =
       delay (let (x ::: xs) = adv ev in Beh (K x ::: delay (unwrap (adv (aux x (EvDense xs))))))
     aux initial (EvSparse ev) =
@@ -104,10 +105,10 @@ stepper initial event =
                 Nothing' -> Beh (K initial ::: delay (unwrap (adv (aux initial (EvSparse xs)))))
         )
 
-trigger :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev c
+trigger :: (Stable b, Stable s) => Box (a -> b -> c) -> Ev a -> Beh s b -> Ev c
 trigger f event behaviour = EvSparse (trig f event behaviour)
   where
-    trig :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
+    trig :: (Stable b, Stable s) => Box (a -> b -> c) -> Ev a -> Beh s b -> O (Sig (Maybe' c))
     trig f' (EvSparse as) (Beh (b ::: bs)) =
       delayC $
         delay
@@ -145,10 +146,10 @@ trigger f event behaviour = EvSparse (trig f event behaviour)
                 )
           )
 
-triggerM :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> Ev (Maybe' c)
+triggerM :: (Stable b, Stable s) => Box (a -> b -> Maybe' c) -> Ev a -> Beh s b -> Ev (Maybe' c)
 triggerM f event behaviour = EvDense (trig f event behaviour)
   where
-    trig :: (Stable b) => Box (a -> b -> Maybe' c) -> Ev a -> Beh b -> O (Sig (Maybe' c))
+    trig :: (Stable b, Stable s) => Box (a -> b -> Maybe' c) -> Ev a -> Beh s b -> O (Sig (Maybe' c))
     trig f' (EvDense as) (Beh (b ::: bs)) =
       delayC $
         delay
@@ -302,7 +303,7 @@ filterMap f (EvSparse ev) =
 filter :: Box (a -> Bool) -> Ev a -> Ev a
 filter f = filterMap (box (\x -> if unbox f x then Just' x else Nothing'))
 
-switchS :: (Stable a) => Beh a -> O (a -> Beh a) -> Beh a
+switchS :: (Stable a, Stable s) => Beh s a -> O (a -> Beh s a) -> Beh s a
 switchS (Beh (x ::: xs)) d =
   let rest =
         delayC
@@ -320,7 +321,7 @@ switchS (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
-switchS' :: (Stable a) => Beh a -> O (a -> C (Beh a)) -> Beh a
+switchS' :: (Stable a, Stable s) => Beh s a -> O (a -> C (Beh s a)) -> Beh s a
 switchS' (Beh (x ::: xs)) d =
   let rest =
         delayC
@@ -340,7 +341,7 @@ switchS' (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
-switchSM :: (Stable a) => Beh a -> O (Maybe' (a -> Beh a)) -> Beh a
+switchSM :: (Stable a, Stable s) => Beh s a -> O (Maybe' (a -> Beh s a)) -> Beh s a
 switchSM (Beh (x ::: xs)) d =
   let rest =
         delayC
@@ -360,7 +361,7 @@ switchSM (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
-switchSM' :: (Stable a) => Beh a -> O (Maybe' (a -> C (Beh a))) -> Beh a
+switchSM' :: (Stable a, Stable s) => Beh s a -> O (Maybe' (a -> C (Beh s a))) -> Beh s a
 switchSM' (Beh (x ::: xs)) d =
   let rest =
         delayC
@@ -382,7 +383,7 @@ switchSM' (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
-switchR :: (Stable a) => Beh a -> Ev (a -> Beh a) -> Beh a
+switchR :: (Stable a, Stable s) => Beh s a -> Ev (a -> Beh s a) -> Beh s a
 switchR beh (EvDense steps) =
   switchS beh (delay (let step ::: steps' = adv steps in (\x -> switchR (step x) (EvDense steps'))))
 switchR beh (EvSparse steps) =
@@ -396,7 +397,7 @@ switchR beh (EvSparse steps) =
         )
     )
 
-switchR' :: (Stable a) => Beh a -> Ev (a -> C (Beh a)) -> Beh a
+switchR' :: (Stable a, Stable s) => Beh s a -> Ev (a -> C (Beh s a)) -> Beh s a
 switchR' beh (EvDense steps) =
   switchS'
     beh
