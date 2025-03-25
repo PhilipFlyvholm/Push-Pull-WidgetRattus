@@ -4,6 +4,7 @@
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
@@ -160,7 +161,8 @@ stopWith p (Beh b) = Beh (run b)
         Just' a -> K a ::: never
         Nothing' -> K x ::: delay (run (adv xs))
     run (Fun s f ::: xs) =
-      Fun s
+      Fun
+        s
         ( box
             ( \s' t ->
                 let (a :* b :* s'') = unbox f s' t
@@ -255,8 +257,8 @@ dtf = fromRational (fromIntegral dt % 1000000)
 --                 )
 --           )
 
-intergral' :: (Stable s) => Float -> Beh s Float -> C (Beh () Float)
-intergral' cur (Beh (x ::: xs)) = do
+intergral' :: (Stable s) => Float -> s -> Beh s Float -> C (Beh (Float :* Time :* s) Float)
+intergral' cur s (Beh (x ::: xs)) = do
   t <- time
   let rest =
         delayC
@@ -265,17 +267,25 @@ intergral' cur (Beh (x ::: xs)) = do
                   t' <- time
                   let tDiff = diffTime t' t
                   let dt = fromRational (toRational tDiff)
-                  unwrap <$> intergral' (cur + apply x t' * dt) (Beh (adv xs))
+                  let (v :* s') =
+                        case x of
+                          K a -> a :* s
+                          Fun s' f -> let (v :* _ :* s'') = unbox f s' t' in (v :* s'')
+                  unwrap <$> intergral' (cur + v * dt) s' (Beh (adv xs))
               )
           )
   let curF =
         Fun
-          ()
+          (cur :* t :* s)
           ( box
-              ( \_ t' ->
-                  let tDiff = diffTime t' t
+              ( \(lv :* lt :* ls) t' ->
+                  let tDiff = diffTime t' lt
                       dt = fromRational (toRational tDiff)
-                   in cur + apply x t' * dt :* False :* () -- TODO: Use state
+                      (v :* s') =
+                        case x of
+                          K a -> a :* ls
+                          Fun s' f -> let (v :* _ :* s'') = unbox f s' t' in (v :* s'')
+                   in lv + v * dt :* False :* (lv + v :* t' :* s')
               )
           )
   return $ Beh (curF ::: rest)
