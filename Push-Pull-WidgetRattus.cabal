@@ -61,3 +61,7 @@ executable calculator
 executable rewrite
   import: shared-settings
   main-is: Examples/RewriteTests.hs
+
+executable integral
+  import: shared-settings
+  main-is: Examples/IntegralTests.hs

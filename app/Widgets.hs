@@ -181,7 +181,7 @@ mkButton' t = do
 
 -- Label
 data Label' where
-      Label' :: (Displayable a) => {labText :: !(Beh () a)} -> Label'
+      Label' :: (Displayable a, Stable s) => {labText :: !(Beh s a)} -> Label'
 
 continuous ''Label'
 instance IsWidget' Label' where
@@ -189,7 +189,7 @@ instance IsWidget' Label' where
     t' <- discretize t
     return $ WR.mkWidget (WR.Label t')
 
-mkLabel' :: (Displayable a) => Beh () a -> C Label'
+mkLabel' :: (Displayable a, Stable s) => Beh s a -> C Label'
 mkLabel' t = do
   return $ Label' t
 

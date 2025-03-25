@@ -285,7 +285,7 @@ intergral' cur s (Beh (x ::: xs)) = do
                         case x of
                           K a -> a :* ls
                           Fun s' f -> let (v :* _ :* s'') = unbox f s' t' in (v :* s'')
-                   in lv + v * dt :* False :* (lv + v :* t' :* s')
+                   in lv + v * dt :* False :* (lv+v*dt :* t' :* s')
               )
           )
   return $ Beh (curF ::: rest)
