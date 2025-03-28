@@ -27,12 +27,12 @@ import Prelude hiding (max)
 class (Continuous a) => IsWidget' a where
   mkOldWidget :: a -> C Widget
 
-  setEnabled :: a -> Beh () Bool -> Widget'
+  setEnabled :: a -> Beh Bool -> Widget'
   setEnabled = Widget'
 
 
 data Widget' where
-  Widget' :: IsWidget' a => !a -> !(Beh () Bool) -> Widget'
+  Widget' :: IsWidget' a => !a -> !(Beh Bool) -> Widget'
 
 
 continuous ''Widget'
@@ -68,7 +68,7 @@ instance {-# OVERLAPPABLE #-} (IsWidget a, Continuous a) => IsWidget' a where
 
 -- HStack 
 data HStack' where
-      HStack' :: IsWidget a => !(Beh () (List a)) -> HStack'
+      HStack' :: IsWidget a => !(Beh (List a)) -> HStack'
 
 
 continuous ''HStack'
@@ -78,7 +78,7 @@ instance IsWidget' HStack' where
         ws' <- discretize ws
         return $ WR.mkWidget (WR.HStack ws')
 
-mkHStack' :: IsWidget a => Beh () (List a) -> C HStack'
+mkHStack' :: IsWidget a => Beh (List a) -> C HStack'
 mkHStack' wl = do
       return (HStack' wl)
 
@@ -89,7 +89,7 @@ mkConstHStack' w = do
 
 -- VStack
 data VStack' where
-  VStack' :: (IsWidget a) => !(Beh () (List a)) -> VStack'
+  VStack' :: (IsWidget a) => !(Beh (List a)) -> VStack'
 
 continuous ''VStack'
 instance IsWidget' VStack' where
@@ -97,7 +97,7 @@ instance IsWidget' VStack' where
     ws' <- discretize ws
     return $ WR.mkWidget (WR.VStack ws')
 
-mkVStack' :: IsWidget a => Beh () (List a) -> C VStack'
+mkVStack' :: IsWidget a => Beh (List a) -> C VStack'
 mkVStack' wl = do
       return (VStack' wl)
 
@@ -109,7 +109,7 @@ mkConstVStack' w = do
 
 -- TextDropDown
 data TextDropdown' =
-  TextDropdown' {tddCurr :: !(Beh () Text), tddEvent :: !(Chan Text), tddList :: !(Beh () (List Text))}
+  TextDropdown' {tddCurr :: !(Beh Text), tddEvent :: !(Chan Text), tddList :: !(Beh (List Text))}
 
 continuous ''TextDropdown'
 instance IsWidget' TextDropdown' where
@@ -118,7 +118,7 @@ instance IsWidget' TextDropdown' where
     list' <- discretize list
     return $ WR.mkWidget (WR.TextDropdown cur' ev list')
 
-mkTextDropdown' :: Beh () (List Text) -> Text -> C TextDropdown'
+mkTextDropdown' :: Beh (List Text) -> Text -> C TextDropdown'
 mkTextDropdown' opts initial = do
   c <- chan
   let beh = Event.stepper initial $ mkEv (box (wait c))
@@ -127,7 +127,7 @@ mkTextDropdown' opts initial = do
 
 -- Popup
 data Popup' =
-  Popup' {popCurr :: !(Beh () Bool), popEvent :: !(Chan Bool), popChild :: !(Beh () Widget)}
+  Popup' {popCurr :: !(Beh Bool), popEvent :: !(Chan Bool), popChild :: !(Beh Widget)}
 
 continuous ''Popup'
 instance IsWidget' Popup' where
@@ -136,7 +136,7 @@ instance IsWidget' Popup' where
         child' <- discretize child
         return $ WR.mkWidget (WR.Popup curr' ch child')
 
-mkPopup' :: Ev Bool -> Beh () Widget -> C Popup'
+mkPopup' :: Ev Bool -> Beh Widget -> C Popup'
 mkPopup' initialVisibility w = do
       c <- chan
       let changeEvent = mkEv (box (wait c))
@@ -146,7 +146,7 @@ mkPopup' initialVisibility w = do
 
 -- Slider
 data Slider' =
-  Slider' {sldCurr :: !(Beh () Int), sldEvent :: !(Chan Int), sldMin :: !(Beh () Int), sldMax :: !(Beh () Int)}
+  Slider' {sldCurr :: !(Beh Int), sldEvent :: !(Chan Int), sldMin :: !(Beh Int), sldMax :: !(Beh Int)}
 
 continuous ''Slider'
 instance IsWidget' Slider' where
@@ -156,7 +156,7 @@ instance IsWidget' Slider' where
     max' <- discretize max
     return $ WR.mkWidget (WR.Slider curr' ev min' max')
 
-mkSlider' :: Int -> Beh () Int -> Beh () Int -> C Slider'
+mkSlider' :: Int -> Beh Int -> Beh Int -> C Slider'
 mkSlider' start min max = do
   c <- chan
   let curr = Event.stepper start $ mkEv (box (wait c))
@@ -165,7 +165,7 @@ mkSlider' start min max = do
 
 -- Button
 data Button' where
-  Button' :: (Displayable a) => {btnClick :: !(Chan ()), btnContent :: !(Beh () a)} -> Button'
+  Button' :: (Displayable a) => {btnClick :: !(Chan ()), btnContent :: !(Beh a)} -> Button'
 
 continuous ''Button'
 instance IsWidget' Button' where
@@ -173,7 +173,7 @@ instance IsWidget' Button' where
     w <- discretize b
     return $ WR.mkWidget (WR.Button w click)
 
-mkButton' :: (Displayable a) => Beh () a -> C Button'
+mkButton' :: (Displayable a) => Beh a -> C Button'
 mkButton' t = do
    c <- chan
    return $ Button' c t
@@ -181,7 +181,7 @@ mkButton' t = do
 
 -- Label
 data Label' where
-      Label' :: (Displayable a, Stable s) => {labText :: !(Beh s a)} -> Label'
+      Label' :: Displayable a => {labText :: !(Beh a)} -> Label'
 
 continuous ''Label'
 instance IsWidget' Label' where
@@ -189,13 +189,13 @@ instance IsWidget' Label' where
     t' <- discretize t
     return $ WR.mkWidget (WR.Label t')
 
-mkLabel' :: (Displayable a, Stable s) => Beh s a -> C Label'
+mkLabel' :: Displayable a => Beh a -> C Label'
 mkLabel' t = do
   return $ Label' t
 
 
 -- TextField
-data TextField' = TextField' {tfContent :: !(Beh () Text), tfInput :: !(Chan Text)}
+data TextField' = TextField' {tfContent :: !(Beh Text), tfInput :: !(Chan Text)}
 
 continuous ''TextField'
 instance IsWidget' TextField' where
@@ -211,7 +211,7 @@ mkTextField' txt = do
   return $ TextField' beh c
 
 -- ProgressBar
-mkProgressBar' :: Beh () Int -> Beh () Int -> Beh () Int -> C Slider'
+mkProgressBar' :: Beh Int -> Beh Int -> Beh Int -> C Slider'
 mkProgressBar' min max curr = do
       c <- chan
       let boundedCurrent = Behaviour.zipWith (box Prelude.min) curr max
@@ -231,7 +231,7 @@ textFieldOnInput tf =
   let ch = tfInput tf
   in mkEv (box (wait ch))
 
-setInputBehTF :: TextField' -> Beh () Text -> TextField'
+setInputBehTF :: TextField' -> Beh Text -> TextField'
 setInputBehTF tf b =
   tf{tfContent = b}
 
@@ -240,7 +240,7 @@ sliderOnChange s =
   let ch = sldEvent s
   in mkEv (box (wait ch))
 
-mkConstText :: String -> Beh () Text
+mkConstText :: String -> Beh Text
 mkConstText s = constK (pack s)
 
 runApplication' :: IsWidget' a => C a -> IO()

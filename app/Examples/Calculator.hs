@@ -77,7 +77,7 @@ calculatorExample = do
         scan (box compute) (0 :* Plus :* True) operand
 
   -- -- The behaviour that should be displayed
-  let displayBeh :: Beh () Int =
+  let displayBeh :: Beh Int =
         Behaviour.zipWith (box (\(n :* _ :* b) m -> if b then n else m)) (Event.stepper (0 :* Plus :* False) resultEv) (Event.stepper 0 numberEv)
 
   -- UI

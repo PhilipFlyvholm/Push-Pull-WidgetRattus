@@ -22,7 +22,7 @@ nominalToInt x = floor $ toRational x
 intToNominal :: Int -> NominalDiffTime
 intToNominal x = fromInteger (toInteger x)
 
-timeFrom :: C (Int -> NominalDiffTime -> Beh () (NominalDiffTime :* Int))
+timeFrom :: C (Int -> NominalDiffTime -> Beh (NominalDiffTime :* Int))
 timeFrom = do
   timeBeh <- elapsedTime
   return
@@ -48,7 +48,7 @@ timerExample = do
   let resetTrigger = btnOnClickEv resetBtn
 
   -- Input events
-  let resetEv :: Ev (C (NominalDiffTime :* Int -> Beh () (NominalDiffTime :* Int))) =
+  let resetEv :: Ev (C (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int))) =
         Event.map
           ( box
               ( \_ -> do
@@ -58,7 +58,7 @@ timerExample = do
           )
           resetTrigger
 
-  let maxEv :: (Ev (C (NominalDiffTime :* Int -> Beh () (NominalDiffTime :* Int)))) =
+  let maxEv :: (Ev (C (NominalDiffTime :* Int -> Beh (NominalDiffTime :* Int)))) =
         Event.map
           ( box
               ( \newMax -> do

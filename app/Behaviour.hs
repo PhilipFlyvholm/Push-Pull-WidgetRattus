@@ -1,5 +1,6 @@
 {-# HLINT ignore "Eta reduce" #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,7 +13,6 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Behaviour where
-
 import Data.Ratio
 import Primitives
 import WidgetRattus
@@ -20,57 +20,61 @@ import WidgetRattus.InternalPrimitives (Continuous (..), O (Delay), adv', clockU
 import WidgetRattus.Signal hiding (const, integral, jump, map, switch)
 import Prelude hiding (const, map, zipWith)
 
-newtype Beh s a = Beh (Sig (Fun s a))
+newtype Beh a = Beh (Sig (Fun a))
 
-unwrap :: Beh s a -> Sig (Fun s a)
+unwrap :: Beh a -> Sig (Fun a)
 unwrap (Beh a) = a
 
-const :: Fun s a -> Beh s a
+const :: Fun a -> Beh a
 const x = Beh (x ::: never)
 
-constK :: a -> Beh s a
+constK :: a -> Beh a
 constK x = Beh (K x ::: never)
 
-timeBehaviour :: Beh () Time
-timeBehaviour = const (Fun () (box (\s t -> t :* False :* s)))
+timeBehaviour :: Beh Time
+timeBehaviour = const (Fun () (box (\s t -> t :* Just' s)))
 
-map :: Box (a -> b) -> Beh s a -> Beh s b
+map :: Box (a -> b) -> Beh a -> Beh b
 map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (unwrap $ Behaviour.map f (Beh (adv xs))))
 
 sampleInterval :: O ()
 sampleInterval = timer 20000
 
-discretize :: (Stable s) => Beh s a -> C (Sig a)
+discretize :: Beh a -> C (Sig a)
 discretize (Beh (K x ::: xs)) = do
   let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
   return $ x ::: rest
-discretize (Beh (Fun s f ::: xs)) = do
-  t <- time
-  let (cur :* b :* s') = unbox f s t
+discretize (Beh (Fun s f ::: xs)) = discretizeFun s f xs
+  where
+    discretizeFun :: (Stable s) => s -> Box (s -> Time -> (a :* Maybe' s)) -> O (Sig (Fun a)) -> C (Sig a)
+    discretizeFun s f xs = do
+      t <- time
+      let (cur :* s') = unbox f s t
 
-  let rest =
-        if b
-          then delayC $ delay (let sig = adv xs in discretize (Beh sig))
-          else
-            delayC $
-              delay
-                ( case select xs sampleInterval of
-                    Fst x _ -> discretize (Beh x)
-                    Snd beh' _ -> discretize (Beh (Fun s' f ::: beh'))
-                    Both x _ -> discretize (Beh x)
-                )
-  return (cur ::: rest)
+      let rest =
+            case s' of
+              Just' s'' ->
+                delayC $
+                  delay
+                    ( case select xs sampleInterval of
+                        Fst x _ -> discretize (Beh x)
+                        Snd beh' _ -> discretize (Beh (Fun s'' f ::: beh'))
+                        Both x _ -> discretize (Beh x)
+                    )
+              Nothing' -> delayC $ delay (let sig = adv xs in discretize (Beh sig))
 
-elapsedTime :: C (Beh () NominalDiffTime)
+      return (cur ::: rest)
+
+elapsedTime :: C (Beh NominalDiffTime)
 elapsedTime = do
   startTime <- time
-  return $ Beh (Fun () (box (\s currentTime -> diffTime currentTime startTime :* False :* s)) ::: never)
+  return $ Beh (Fun () (box (\s currentTime -> diffTime currentTime startTime :* Just' s)) ::: never)
 
 withTime :: O (Time -> a) -> O a
 withTime delayed =
   delayC $ delay (let f = adv delayed in do f <$> time)
 
-switch :: Beh s a -> O (Beh s a) -> Beh s a
+switch :: Beh a -> O (Beh a) -> Beh a
 switch (Beh (x ::: xs)) d =
   Beh $
     x
@@ -90,9 +94,8 @@ switch (Beh (x ::: xs)) d =
 --
 -- >                      xs:  1 2 3     2
 -- >                      ys:  1     0 5 2
--- >
 -- > zipWith (box (+)) xs ys:  2 3 4 3 8 4
-zipWith :: (Stable a, Stable b, Stable s) => Box (a -> b -> c) -> Beh s a -> Beh s b -> Beh s c
+zipWith :: (Stable a, Stable b) => Box (a -> b -> c) -> Beh a -> Beh b -> Beh c
 zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
   Beh
     ( app x y
@@ -108,15 +111,17 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
     )
   where
     app (K x') (K y') = K (unbox f x' y')
-    app (Fun xs x') (Fun _ y') =
+    app (Fun xs x') (Fun ys y') =
       Fun
-        xs
+        (xs :* ys)
         ( box
-            ( \s t ->
-                let (a :* ab :* xs') = unbox x' s t
-                    (b :* bb :* _) = unbox y' s t
+            ( \(s :* s') t ->
+                let (a :* xs') = unbox x' s t
+                    (b :* ys') = unbox y' s' t
                     left = unbox f a b
-                 in left :* (ab || bb) :* xs'
+                 in case (xs' :* ys') of
+                      (Just' xs'' :* Just' ys'') -> left :* Just' (xs'' :* ys'')
+                      _ -> left :* Nothing'
             )
         )
     app (Fun xs x') (K y') =
@@ -124,9 +129,9 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
         xs
         ( box
             ( \s t ->
-                let (a :* ab :* xs') = unbox x' s t
+                let (a :* xs') = unbox x' s t
                     left = unbox f a y'
-                 in left :* ab :* xs'
+                 in left :* xs'
             )
         )
     app (K x') (Fun ys y') =
@@ -134,26 +139,36 @@ zipWith f (Beh (x ::: xs)) (Beh (y ::: ys)) =
         ys
         ( box
             ( \s t ->
-                let (b :* bb :* ys') = unbox y' s t
+                let (b :* ys') = unbox y' s t
                     left = unbox f x' b
-                 in left :* bb :* ys'
+                 in left :* ys'
             )
         )
 
 -- | Variant of 'zipWith' with three behaviours.
-zipWith3 :: forall a b c d s. (Stable a, Stable b, Stable c, Stable s) => Box (a -> b -> c -> d) -> Beh s a -> Beh s b -> Beh s c -> Beh s d
+zipWith3 :: forall a b c d. (Stable a, Stable b, Stable c) => Box (a -> b -> c -> d) -> Beh a -> Beh b -> Beh c -> Beh d
 zipWith3 f as bs cs = Behaviour.zipWith (box (\f' x -> unbox f' x)) cds cs
   where
-    cds :: Beh s (Box (c -> d))
+    cds :: Beh (Box (c -> d))
     cds = Behaviour.zipWith (box (\a b -> box (\c -> unbox f a b c))) as bs
 
-stop :: (Stable s) => Box (a -> Bool) -> Beh s a -> Beh s a
+stop :: Box (a -> Bool) -> Beh a -> Beh a
 stop p (Beh b) = Beh (run b)
   where
     run (K x ::: xs) = K x ::: if unbox p x then never else delay (run (adv xs))
-    run (Fun s f ::: xs) = Fun s (box (\s' t -> let (a :* b :* s'') = unbox f s' t in (a :* (unbox p a || b) :* s''))) ::: delay (run (adv xs))
+    run (Fun s f ::: xs) =
+      Fun
+        s
+        ( box
+            ( \s' t ->
+                let (a :* s'') = unbox f s' t
+                 in let b = unbox p a
+                     in (if b then a :* Nothing' else a :* s'')
+            )
+        )
+        ::: delay (run (adv xs))
 
-stopWith :: (Stable s) => Box (a -> Maybe' a) -> Beh s a -> Beh s a
+stopWith :: Box (a -> Maybe' a) -> Beh a -> Beh a
 stopWith p (Beh b) = Beh (run b)
   where
     run (K x ::: xs) =
@@ -165,10 +180,10 @@ stopWith p (Beh b) = Beh (run b)
         s
         ( box
             ( \s' t ->
-                let (a :* b :* s'') = unbox f s' t
+                let (a :* s'') = unbox f s' t
                  in case unbox p a of
-                      Just' a' -> a' :* True :* s''
-                      Nothing' -> a :* b :* s''
+                      Just' a' -> a' :* Nothing'
+                      Nothing' -> a :* s''
             )
         )
         ::: delay (run (adv xs))
@@ -257,8 +272,8 @@ dtf = fromRational (fromIntegral dt % 1000000)
 --                 )
 --           )
 
-intergral' :: (Stable s) => Float -> s -> Beh s Float -> C (Beh (Float :* Time :* s) Float)
-intergral' cur s (Beh (x ::: xs)) = do
+integral' :: forall s. (Stable s) => Float -> s -> Beh Float -> C (Beh Float)
+integral' cur s (Beh (K a ::: xs)) = do
   t <- time
   let rest =
         delayC
@@ -266,36 +281,64 @@ intergral' cur s (Beh (x ::: xs)) = do
               ( do
                   t' <- time
                   let tDiff = diffTime t' t
-                  let dt = fromRational (toRational tDiff)
-                  let (v :* s') =
-                        case x of
-                          K a -> a :* s
-                          Fun s' f -> let (v :* _ :* s'') = unbox f s' t' in (v :* s'')
-                  unwrap <$> intergral' (cur + v * dt) s' (Beh (adv xs))
+                  let r = cur + a * fromRational (toRational tDiff)
+                  let result = integral' r s (Beh (adv xs))
+                  unwrap <$> result
               )
           )
   let curF =
         Fun
-          (cur :* t :* s)
+          ()
           ( box
-              ( \(lv :* lt :* ls) t' ->
-                  let tDiff = diffTime t' lt
+              ( \s t' ->
+                  let tDiff = diffTime t' t
                       dt = fromRational (toRational tDiff)
-                      (v :* s') =
-                        case x of
-                          K a -> a :* ls
-                          Fun s' f -> let (v :* _ :* s'') = unbox f s' t' in (v :* s'')
-                   in lv + v * dt :* False :* (lv+v*dt :* t' :* s')
+                   in cur + a * dt :* Just' s
               )
           )
-  return $ Beh (curF ::: rest)
+  return (Beh (curF ::: rest))
+integral' cur _ (Beh (Fun s f ::: xs)) = integralFun cur s f xs
+  where
+    integralFun :: forall s. (Stable s) => Float -> s -> Box (s -> Time -> (Float :* Maybe' s)) -> O (Sig (Fun Float)) -> C (Beh Float)
+    integralFun cur s f xs =
+      do
+        t <- time
+        let rest =
+              delayC
+                ( delay
+                    ( do
+                        t' <- time
+                        let tDiff = diffTime t' t
+                        let dt = fromRational (toRational tDiff)
+                        let (v :* s') = unbox f s t'
+                        let s'' =
+                              case s' of
+                                Just' s''' -> s'''
+                                Nothing' -> s
+                        unwrap <$> integral' (cur + v * dt) s'' (Beh (adv xs))
+                    )
+                )
+        let curF =
+              Fun
+                (cur :* t :* s)
+                ( box
+                    ( \(lv :* lt :* ls) t' ->
+                        let tDiff = diffTime t' lt
+                            dt = fromRational (toRational tDiff)
+                            (v :* s') = unbox f ls t'
+                         in case s' of
+                              Just' s'' -> lv + v * dt :* Just' (lv + v * dt :* t' :* s'')
+                              _ -> v + v * dt :* Nothing'
+                    )
+                )
+        return $ Beh (curF ::: rest)
 
-derivative' :: (Stable s) => Beh s Float -> C (Beh () Float)
+derivative' :: Beh Float -> C (Beh Float)
 derivative' (Beh (x ::: xs)) = do
   t <- time
   Beh <$> der (apply x t) (x ::: xs)
   where
-    der :: (Stable s) => Float -> Sig (Fun s Float) -> C (Sig (Fun () Float))
+    der :: Float -> Sig (Fun Float) -> C (Sig (Fun Float))
     der last (x ::: xs) = do
       t <- time
       let curF =
@@ -304,7 +347,7 @@ derivative' (Beh (x ::: xs)) = do
                 ( \_ t' ->
                     let tDiff = diffTime t' t
                         dt = fromRational (toRational tDiff)
-                     in (apply x t - last) / dt :* False :* () -- TODO: Use state
+                     in (apply x t - last) / dt :* Just' () -- TODO: Use state
                 )
       let rest =
             delayC
@@ -316,7 +359,7 @@ derivative' (Beh (x ::: xs)) = do
               )
       return (curF ::: rest)
 
-instance (Continuous a, Stable s) => Continuous (Beh s a) where
+instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
     if inputInClock inp cl
       then Beh (adv' xs inp)
