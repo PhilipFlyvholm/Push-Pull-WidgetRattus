@@ -65,3 +65,7 @@ executable rewrite
 executable integral
   import: shared-settings
   main-is: Examples/IntegralTests.hs
+
+executable derivative
+  import: shared-settings
+  main-is: Examples/DerivativeTests.hs
