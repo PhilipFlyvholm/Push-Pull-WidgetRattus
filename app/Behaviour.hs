@@ -13,6 +13,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Behaviour where
+
 import Data.Ratio
 import Primitives
 import WidgetRattus
@@ -333,31 +334,51 @@ integral' cur _ (Beh (Fun s f ::: xs)) = integralFun cur s f xs
                 )
         return $ Beh (curF ::: rest)
 
-derivative' :: Beh Float -> C (Beh Float)
-derivative' (Beh (x ::: xs)) = do
+derivative' :: forall s. (Stable s) => Beh Float -> s -> C (Beh Float)
+derivative' (Beh (x ::: xs)) s = do
   t <- time
-  Beh <$> der (apply x t) (x ::: xs)
+  Beh <$> der (apply x t) s (x ::: xs)
   where
-    der :: Float -> Sig (Fun Float) -> C (Sig (Fun Float))
-    der last (x ::: xs) = do
-      t <- time
-      let curF =
-            Fun () $
-              box
-                ( \_ t' ->
-                    let tDiff = diffTime t' t
-                        dt = fromRational (toRational tDiff)
-                     in (apply x t - last) / dt :* Just' () -- TODO: Use state
-                )
+    der :: forall s. (Stable s) => Float -> s -> Sig (Fun Float) -> C (Sig (Fun Float))
+    der last _ (Fun s f ::: xs) = derFun last s f xs
+      where
+        derFun :: forall s. (Stable s) => Float -> s -> Box (s -> Time -> (Float :* Maybe' s)) -> O (Sig (Fun Float)) -> C (Sig (Fun Float))
+        derFun last s f xs = do
+          t <- time
+          let rest =
+                delayC
+                  ( delay
+                      ( do
+                          t' <- time
+                          let (v :* s') = unbox f s t'
+                          let s''' =
+                                case s' of
+                                  Just' s'' -> s''
+                                  Nothing' -> s
+                          der v s''' (adv xs)
+                      )
+                  )
+          let curF =
+                Fun (last :* t :* s) $
+                  box
+                    ( \(last :* t :* s) t' ->
+                        let tDiff = diffTime t' t
+                            dt = fromRational (toRational tDiff)
+                            (v :* s') = unbox f s t
+                         in case s' of
+                              Just' s'' -> (v - last) / dt :* Just' (v :* t' :* s'')
+                              Nothing' -> (v - last) / dt :* Nothing'
+                    )
+          return (curF ::: rest)
+    der _ s (K x ::: xs) = do
       let rest =
             delayC
               ( delay
                   ( do
-                      t' <- time
-                      der (apply x t') (adv xs)
+                      der x s (adv xs)
                   )
               )
-      return (curF ::: rest)
+      return (K 0 ::: rest)
 
 instance (Continuous a) => Continuous (Beh a) where
   progressInternal inp (Beh (x ::: xs@(Delay cl _))) =
