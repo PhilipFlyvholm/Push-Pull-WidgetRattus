@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedLists #-}{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# LANGUAGE ScopedTypeVariables #-}

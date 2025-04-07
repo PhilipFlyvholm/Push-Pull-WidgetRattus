@@ -383,6 +383,7 @@ switchSM' (Beh (x ::: xs)) d =
           )
    in Beh (x ::: rest)
 
+
 switchR :: Stable a => Beh a -> Ev (a -> Beh a) -> Beh a
 switchR beh (EvDense steps) =
   switchS beh (delay (let step ::: steps' = adv steps in (\x -> switchR (step x) (EvDense steps'))))
