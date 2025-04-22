@@ -5,14 +5,14 @@ module Primitives where
 
 import WidgetRattus
 
-data Fun t a = K !a | Fun !(Box (t -> a))
+data Fun a = K !a | Fun !(Box (Time -> a))
 
 continuous ''Fun
 
-apply :: Fun t a -> (t -> a)
+apply :: Fun a -> (Time -> a)
 apply (K a) = Prelude.const a
 apply (Fun f) = unbox f
 
-mapF :: Box (a -> b) -> Fun t a -> Fun t b
+mapF :: Box (a -> b) -> Fun a -> Fun b
 mapF f (K a) = K (unbox f a)
 mapF f (Fun t) = Fun (box (unbox f . unbox t))

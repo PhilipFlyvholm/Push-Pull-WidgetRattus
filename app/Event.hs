@@ -82,7 +82,7 @@ interleave f (Ev xs) (Ev ys) = Ev (aux f xs ys)
 scan :: (Stable b) => Box (b -> a -> b) -> b -> Ev a -> Ev b
 scan f acc (Ev as) = Ev $ delay (WidgetRattus.Signal.scan f acc (adv as))
 
-app :: (Stable b, Stable a) => Box (b -> a -> b) -> Box (Fun Time b -> a -> Fun Time b)
+app :: (Stable b, Stable a) => Box (b -> a -> b) -> Box (Fun b -> a -> Fun b)
 app f =
   box
     (\b a -> mapF (box (\b' -> unbox f b' a)) b)

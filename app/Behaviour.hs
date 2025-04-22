@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS -fplugin=WidgetRattus.Plugin #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Behaviour where
 
@@ -18,16 +19,20 @@ import WidgetRattus.Signal hiding (const, switch)
 import Prelude hiding (const, map, zipWith)
 import WidgetRattus.InternalPrimitives (Continuous(..), O (Delay), inputInClock, adv', clockUnion)
 
-newtype Beh a = Beh (Sig (Fun Time a))
+newtype Beh a = Beh (Sig (Fun a))
 
-const :: Fun Time a -> Beh a
+const :: Fun a -> Beh a
 const x = Beh (x ::: never)
 
 timeBehaviour :: Beh Time
 timeBehaviour = const (Fun (box id))
 
 map :: Box (a -> b) -> Beh a -> Beh b
-map f (Beh (x ::: xs)) = Beh (mapF f x ::: delay (let Beh s = Behaviour.map f (Beh (adv xs)) in s))
+map f (Beh sig) = Beh (aux f sig)
+  where
+    aux :: Box (a -> b) -> Sig (Fun a) -> Sig (Fun b)
+    aux f (x:::xs) = mapF f x ::: delay (aux f (adv xs))
+
 
 sampleInterval :: O ()
 sampleInterval = timer 200000 -- For some reason is this a second
