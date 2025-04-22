@@ -31,6 +31,15 @@ map f (Ev sig) =
         )
     )
 
+map2 :: Box (a -> b) -> Ev a -> Ev b
+map2 f (Ev sig) = Ev (delay (WidgetRattus.Signal.map f (adv sig)))
+
+map3 :: Box (a -> b) -> Ev a -> Ev b
+map3 f (Ev sig) = Ev (aux f sig)
+  where
+    aux :: Box (a -> b) -> O (Sig a) -> O (Sig b)
+    aux f xs = delay (let (x ::: xs') = adv xs in unbox f x ::: aux f xs')
+
 stepper :: a -> Ev a -> Beh a
 stepper initial event =
   Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait event) in sig))
@@ -59,20 +68,16 @@ triggerAwait f event behaviour = Ev (trig f event behaviour)
           )
 
 interleave :: Box (a -> a -> a) -> Ev a -> Ev a -> Ev a
-interleave f (Ev xs) (Ev ys) =
-  Ev $
-    delay
-      ( case select xs ys of
-          Fst (x ::: xs') ys' ->
-            let Ev rest = interleave f (Ev xs') (Ev ys')
-             in (x ::: rest)
-          Snd xs' (y ::: ys') ->
-            let Ev rest = interleave f (Ev xs') (Ev ys')
-             in (y ::: rest)
-          Both (x ::: xs') (y ::: ys') ->
-            let Ev rest = interleave f (Ev xs') (Ev ys')
-             in unbox f x y ::: rest
-      )
+interleave f (Ev xs) (Ev ys) = Ev (aux f xs ys)
+  where
+    aux :: Box (a -> a -> a) -> O (Sig a) -> O (Sig a) -> O (Sig a)
+    aux f xs ys =
+      delay 
+        ( case select xs ys of
+            Fst (x ::: xs') ys' -> x ::: aux f xs' ys'
+            Snd xs' (y ::: ys') -> y ::: aux f xs' ys'
+            Both (x ::: xs') (y ::: ys') -> unbox f x y ::: aux f xs' ys'
+        )
 
 scan :: (Stable b) => Box (b -> a -> b) -> b -> Ev a -> Ev b
 scan f acc (Ev as) = Ev $ delay (WidgetRattus.Signal.scan f acc (adv as))
