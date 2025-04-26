@@ -40,13 +40,13 @@ map3 f (Ev sig) = Ev (aux f sig)
     aux :: Box (a -> b) -> O (Sig a) -> O (Sig b)
     aux f xs = delay (let (x ::: xs') = adv xs in unbox f x ::: aux f xs')
 
-stepper :: a -> Ev a -> Beh a
+stepper :: (Stable a) => a -> Ev a -> Beh a
 stepper initial event =
-  Beh (K initial ::: delay (let (Beh sig) = adv (stepperAwait event) in sig))
-
-stepperAwait :: Ev a -> O (Beh a)
-stepperAwait (Ev sig) =
-  delay (let (x ::: xs) = adv sig in Beh (K x ::: delay (let (Beh sig') = adv (stepperAwait (Ev xs)) in sig')))
+  Beh (K initial ::: delay (adv (aux event)))
+  where
+    aux :: (Stable a) => Ev a -> O (Sig (Fun a))
+    aux (Ev ev) =
+      delay (let (x ::: xs) = adv ev in K x ::: delay (adv (aux (Ev xs))))
 
 triggerAwait :: (Stable b) => Box (a -> b -> c) -> Ev a -> Beh b -> Ev (Maybe' c)
 triggerAwait f event behaviour = Ev (trig f event behaviour)
@@ -72,7 +72,7 @@ interleave f (Ev xs) (Ev ys) = Ev (aux f xs ys)
   where
     aux :: Box (a -> a -> a) -> O (Sig a) -> O (Sig a) -> O (Sig a)
     aux f xs ys =
-      delay 
+      delay
         ( case select xs ys of
             Fst (x ::: xs') ys' -> x ::: aux f xs' ys'
             Snd xs' (y ::: ys') -> y ::: aux f xs' ys'
