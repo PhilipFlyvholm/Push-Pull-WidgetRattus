@@ -25,4 +25,3 @@ mapF f (Fun s f') = Fun s (box (\s t -> let (a :* s') = unbox f' s t in (unbox f
 
 delayCF :: O(a -> C b) -> O(a -> b)
 delayCF (Delay c f) = Delay c (\inp a -> advC' (f inp a) inp)
-

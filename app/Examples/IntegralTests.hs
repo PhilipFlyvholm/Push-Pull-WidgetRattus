@@ -16,7 +16,7 @@ import Prelude hiding (const, filter, getLine, map, null, putStrLn, zip, zipWith
 integralTests :: C VStack'
 integralTests = do
   time <- elapsedTime
-  time' <- integral' 0 () (Behaviour.map (box realToFrac) time)
+  time' <- integral' 0 (Behaviour.map (box realToFrac) time)
   derivativeTime <- derivative' time'
   let shouldBe = Behaviour.map (box (\t -> fromRational ((toRational t)^2)/2)) time
   originalLbl <- mkLabel' time

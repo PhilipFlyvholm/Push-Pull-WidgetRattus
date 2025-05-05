@@ -188,8 +188,8 @@ stopWith p (Beh b) = Beh (run b)
         )
         ::: delay (run (adv xs))
 
-integral' :: forall s. (Stable s) => Float -> s -> Beh Float -> C (Beh Float)
-integral' cur s (Beh (K a ::: xs)) = do
+integral' ::  Float  -> Beh Float -> C (Beh Float)
+integral' cur (Beh (K a ::: xs)) = do
   t <- time
   let rest =
         delayC
@@ -198,7 +198,7 @@ integral' cur s (Beh (K a ::: xs)) = do
                   t' <- time
                   let tDiff = diffTime t' t
                   let r = cur + a * fromRational (toRational tDiff)
-                  let result = integral' r s (Beh (adv xs))
+                  let result = integral' r (Beh (adv xs))
                   unwrap <$> result
               )
           )
@@ -213,7 +213,7 @@ integral' cur s (Beh (K a ::: xs)) = do
               )
           )
   return (Beh (curF ::: rest))
-integral' cur _ (Beh (Fun s f ::: xs)) = integralFun cur s f xs
+integral' cur (Beh (Fun s f ::: xs)) = integralFun cur s f xs
   where
     integralFun :: forall s. (Stable s) => Float -> s -> Box (s -> Time -> (Float :* Maybe' s)) -> O (Sig (Fun Float)) -> C (Beh Float)
     integralFun cur s f xs =
@@ -226,12 +226,8 @@ integral' cur _ (Beh (Fun s f ::: xs)) = integralFun cur s f xs
                         t' <- time
                         let tDiff = diffTime t' t
                         let dt = fromRational (toRational tDiff)
-                        let (v :* s') = unbox f s t'
-                        let s'' =
-                              case s' of
-                                Just' s''' -> s'''
-                                Nothing' -> s
-                        unwrap <$> integral' (cur + v * dt) s'' (Beh (adv xs))
+                        let (v :* _) = unbox f s t'
+                        unwrap <$> integral' (cur + v * dt) (Beh (adv xs))
                     )
                 )
         let curF =
