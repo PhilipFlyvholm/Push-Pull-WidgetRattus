@@ -40,25 +40,24 @@ sampleInterval :: O ()
 sampleInterval = timer 20000
 
 discretize :: Beh a -> C (Sig a)
-discretize (Beh (K x ::: xs)) = do
-  let rest = delayC $ delay (let x' = adv xs in discretize (Beh x'))
-  return $ x ::: rest
-discretize (Beh (Fun f ::: xs)) = do
-  t <- time
-  let (cur :* b) = unbox f t
-
-  let rest =
-        if b
-          then delayC $ delay (let sig = adv xs in discretize (Beh sig))
-          else
-            delayC $
-              delay
-                ( case select xs sampleInterval of
-                    Fst x _ -> discretize (Beh x)
-                    Snd beh' _ -> discretize (Beh (Fun f ::: beh'))
-                    Both x _ -> discretize (Beh x)
-                )
-  return (cur ::: rest)
+discretize (Beh sig) = time >>= (pure . discr sig)
+  where
+    discr :: Sig (Fun a) -> Time -> Sig a
+    discr (K x ::: xs) _ = x ::: withTime (delay (discr (adv xs)))
+    discr (Fun f ::: xs) t =
+      let (cur :* b) = unbox f t
+          rest =
+            if b
+              then withTime $ delay (discr (adv xs))
+              else
+                withTime $
+                  delay
+                    ( case select xs sampleInterval of
+                        Fst x _ -> discr x
+                        Snd beh' _ -> discr (Fun f ::: beh')
+                        Both x _ -> discr x
+                    )
+      in (cur ::: rest)
 
 elapsedTime :: C (Beh NominalDiffTime)
 elapsedTime = do
@@ -327,7 +326,7 @@ instance (Continuous a) => Continuous (Beh a) where
 
   "beh.map/beh.map" forall f g xs.
     map f (map g xs) = map (box (unbox f . unbox g)) xs ;
-  
+
   "beh.constK/beh.map" forall (f :: Stable b => Box (a -> b))  x.
     map f (constK x) = let x' = unbox f x in constK x' ;
 
